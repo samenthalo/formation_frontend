@@ -3,18 +3,34 @@ import { UserCircle, Search, Calendar, Clock, MapPin, BookOpen, CheckSquare, Bui
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 
 interface SessionFormData {
-  formation_id: string;
-  schedule: { date: string; start_time: string; end_time: string; instructor_id: string }[];
-  location: string;
+  titre: string;
+  description: string;
+  lieu: string;
+  nb_heures: number;
+  statut: string;
+  nb_inscrits: number;
+  formation: string; // Changé pour stocker uniquement l'ID
+  formateur: string; // Changé pour stocker uniquement l'ID
+  creneaux: { jour: string; heure_debut: string; heure_fin: string; id_formateur: string }[];
   mode: 'presentiel' | 'distanciel';
-  video_link?: string;
-  default_instructor_id?: string;
-  responsable?: {
-    first_name: string;
-    last_name: string;
-    email: string;
-    phone: string;
-  };
+  lien: string;
+  responsable_nom: string;
+  responsable_prenom: string;
+  responsable_telephone: string;
+  responsable_email: string;
+}
+
+interface Formation {
+  id_formation: string; // Utiliser id_formation
+  titre: string;
+  description: string;
+}
+
+interface Instructor {
+  id_formateur: string; // Utiliser id_formateur
+  nom: string;
+  prenom: string;
+  tags: string[];
 }
 
 const SessionForm = () => {
@@ -22,106 +38,172 @@ const SessionForm = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
 
-  const formations: Formation[] = [
-    { id: '1', title: 'Formation React', description: 'Apprenez à développer des applications web avec React.' },
-    { id: '2', title: 'Formation JavaScript', description: 'Maîtrisez les bases du langage JavaScript.' },
-    { id: '3', title: 'Formation Python', description: 'Découvrez la programmation avec Python.' }
-  ];
-
-  const instructors: Instructor[] = [
-    { id: '1', first_name: 'John', last_name: 'Doe', tags: ['React', 'JavaScript'] },
-    { id: '2', first_name: 'Jane', last_name: 'Smith', tags: ['Python', 'Data Science'] },
-    { id: '3', first_name: 'Alice', last_name: 'Johnson', tags: ['DevOps', 'Cloud'] }
-  ];
-
-  const [isLoading, setIsLoading] = useState(false);
+  const [formations, setFormations] = useState<Formation[]>([]);
+  const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState<SessionFormData>({
-    formation_id: '',
-    schedule: [{ date: '', start_time: '', end_time: '', instructor_id: '' }],
-    location: '',
+    titre: '',
+    description: '',
+    lieu: '',
+    nb_heures: 0,
+    statut: 'créée', // Définir le statut à "créée" par défaut
+    nb_inscrits: 0, // Ajouter un champ pour le nombre d'inscrits
+    formation: '', // Changé pour stocker uniquement l'ID
+    formateur: '', // Changé pour stocker uniquement l'ID
+    creneaux: [{ jour: '', heure_debut: '', heure_fin: '', id_formateur: '' }],
     mode: 'presentiel',
-    video_link: '',
-    default_instructor_id: '',
-    responsable: {
-      first_name: '',
-      last_name: '',
-      email: '',
-      phone: ''
-    }
+    lien: '',
+    responsable_nom: '',
+    responsable_prenom: '',
+    responsable_telephone: '',
+    responsable_email: '',
   });
   const [error, setError] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(false);
   const [selectedFormation, setSelectedFormation] = useState<Formation | null>(null);
 
   useEffect(() => {
-    if (id) {
-      const savedSessions = JSON.parse(localStorage.getItem('sessions') || '[]');
-      const sessionData = savedSessions.find((session: SessionFormData) => session.formation_id === id);
-
-      if (sessionData) {
-        setFormData(sessionData);
+    const fetchFormations = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/formations');
+        if (!response.ok) {
+          throw new Error(`Erreur HTTP! Statut: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('Formations récupérées:', data); // Ajoute ce log
+        setFormations(data);
+      } catch (error) {
+        console.error('Erreur lors de la récupération des formations:', error);
       }
-    }
+    };
 
+    const fetchInstructors = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/formateur');
+        if (!response.ok) {
+          throw new Error(`Erreur HTTP! Statut: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('Formateurs récupérés:', data); // Ajoute ce log
+        setInstructors(data);
+      } catch (error) {
+        console.error('Erreur lors de la récupération des formateurs:', error);
+      }
+    };
+
+    fetchFormations();
+    fetchInstructors();
     setIsLoading(false);
-  }, [id]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const hasError = formData.schedule.some(
-      item => new Date(`${item.date}T${item.end_time}`) < new Date(`${item.date}T${item.start_time}`)
+  
+    // Vérification si le mode est "distanciel" et que le lien est vide
+    if (formData.mode === 'distanciel' && !formData.lien) {
+      setError('Le lien de visio est obligatoire pour les sessions en distanciel.');
+      return;
+    }
+  
+    // Vérification si le mode est "présentiel" et que le lieu est vide
+    if (formData.mode === 'presentiel' && !formData.lieu) {
+      setError('Le lieu est obligatoire pour les sessions en présentiel.');
+      return;
+    }
+  
+    const hasError = formData.creneaux.some(
+      item => new Date(`${item.jour}T${item.heure_fin}`) < new Date(`${item.jour}T${item.heure_debut}`)
     );
-
+  
     if (hasError) {
       setError('L\'heure de fin ne peut pas être antérieure à l\'heure de début pour une même date.');
       return;
     }
-
-    const savedSessions = JSON.parse(localStorage.getItem('sessions') || '[]');
-    if (id) {
-      const updatedSessions = savedSessions.map((session: SessionFormData) =>
-        session.formation_id === id ? formData : session
-      );
-      localStorage.setItem('sessions', JSON.stringify(updatedSessions));
-    } else {
-      localStorage.setItem('sessions', JSON.stringify([...savedSessions, formData]));
+  
+    // Calculer le nombre d'heures
+    const totalHours = formData.creneaux.reduce((total, creneau) => {
+      const start = new Date(`${creneau.jour}T${creneau.heure_debut}`);
+      const end = new Date(`${creneau.jour}T${creneau.heure_fin}`);
+      const duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60); // Convertir en heures
+      return total + duration;
+    }, 0);
+  
+    const formDataToSend = new FormData();
+    formDataToSend.append('titre', formData.titre);
+    formDataToSend.append('description', formData.description);
+    formDataToSend.append('lieu', formData.lieu);
+    formDataToSend.append('nb_heures', totalHours.toString());
+    formDataToSend.append('statut', formData.statut);
+    formDataToSend.append('nb_inscrits', formData.nb_inscrits.toString());
+    formDataToSend.append('formation', formData.formation); // Ajouter l'ID de la formation
+    formDataToSend.append('formateur', formData.formateur); // Ajouter l'ID du formateur par défaut
+    formDataToSend.append('mode', formData.mode);
+    formDataToSend.append('lien', formData.lien);
+    formDataToSend.append('responsable_nom', formData.responsable_nom);
+    formDataToSend.append('responsable_prenom', formData.responsable_prenom);
+    formDataToSend.append('responsable_telephone', formData.responsable_telephone);
+    formDataToSend.append('responsable_email', formData.responsable_email);
+  
+    formData.creneaux.forEach((creneau, index) => {
+      formDataToSend.append(`creneaux[${index}][jour]`, creneau.jour);
+      formDataToSend.append(`creneaux[${index}][heure_debut]`, creneau.heure_debut);
+      formDataToSend.append(`creneaux[${index}][heure_fin]`, creneau.heure_fin);
+      formDataToSend.append(`creneaux[${index}][id_formateur]`, creneau.id_formateur || formData.formateur); // Utiliser id_formateur spécifique au créneau ou par défaut
+    });
+  
+    console.log('Données envoyées:', formDataToSend); // Ajoute ce log
+  
+    try {
+      const response = await fetch('http://localhost:8000/sessionformation/create', {
+        method: 'POST',
+        body: formDataToSend,
+      });
+  
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Session créée:', result);
+        navigate('/admin/formations');
+      } else {
+        const errorData = await response.json();
+        console.error('Erreur du serveur:', errorData); // Ajoute ce log
+        setError(errorData.message || 'Erreur lors de la création de la session.');
+      }
+    } catch (error) {
+      console.error('Erreur réseau:', error); // Ajoute ce log
+      setError('Erreur réseau. Veuillez réessayer plus tard.');
     }
-
-    console.log('Session sauvegardée:', formData);
-    console.log('Sessions dans localStorage:', JSON.parse(localStorage.getItem('sessions') || '[]'));
-    navigate('/admin/formations');
   };
 
   const handleAddSchedule = () => {
     setFormData(prevData => ({
       ...prevData,
-      schedule: [...prevData.schedule, { date: '', start_time: '', end_time: '', instructor_id: prevData.default_instructor_id || '' }]
+      creneaux: [...prevData.creneaux, { jour: '', heure_debut: '', heure_fin: '', id_formateur: prevData.formateur }]
     }));
   };
 
   const handleRemoveSchedule = (index: number) => {
     setFormData(prevData => {
-      const schedule = [...prevData.schedule];
-      schedule.splice(index, 1);
-      return { ...prevData, schedule };
+      const creneaux = [...prevData.creneaux];
+      creneaux.splice(index, 1);
+      return { ...prevData, creneaux };
     });
   };
 
   const handleScheduleChange = (index: number, field: string, value: string) => {
     setFormData(prevData => {
-      const schedule = [...prevData.schedule];
-      schedule[index] = { ...schedule[index], [field]: value };
-      return { ...prevData, schedule };
+      const creneaux = [...prevData.creneaux];
+      creneaux[index] = { ...creneaux[index], [field]: value };
+      return { ...prevData, creneaux };
     });
   };
 
   const handleDefaultInstructorChange = (value: string) => {
     setFormData(prevData => {
-      const updatedSchedule = prevData.schedule.map(item => ({
+      const updatedCreneaux = prevData.creneaux.map(item => ({
         ...item,
-        instructor_id: value
+        id_formateur: value
       }));
-      return { ...prevData, schedule: updatedSchedule, default_instructor_id: value };
+      return { ...prevData, creneaux: updatedCreneaux, formateur: value }; // Mettre à jour formateur avec l'ID
     });
   };
 
@@ -151,6 +233,45 @@ const SessionForm = () => {
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md">
         <div className="p-6 space-y-6">
+          {/* Titre */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Titre
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <BookOpen className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={formData.titre}
+                onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
+                className="pl-10 input-field w-full"
+                placeholder="Titre de la session"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <BookOpen className="h-5 w-5 text-gray-400" />
+              </div>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="pl-10 input-field w-full"
+                placeholder="Description de la session"
+                required
+              />
+            </div>
+          </div>
+
           {/* Formation */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -161,21 +282,24 @@ const SessionForm = () => {
                 <BookOpen className="h-5 w-5 text-gray-400" />
               </div>
               <select
-                value={formData.formation_id}
-                onChange={(e) => setFormData({ ...formData, formation_id: e.target.value })}
+                value={formData.formation}
+                onChange={(e) => {
+                  console.log('ID de la formation sélectionnée:', e.target.value); // Ajoute ce log
+                  setFormData({ ...formData, formation: e.target.value });
+                }}
                 className="pl-10 input-field w-full"
                 required
               >
                 <option value="">Sélectionnez une formation</option>
-                {formations.map(formation => (
-                  <option key={formation.id} value={formation.id}>
-                    {formation.title}
+                {formations.map((formation) => (
+                  <option key={formation.id_formation} value={formation.id_formation}>
+                    {formation.titre}
                   </option>
                 ))}
               </select>
               <button
                 type="button"
-                onClick={() => handleShowSummary(formations.find(f => f.id === formData.formation_id)!)}
+                onClick={() => handleShowSummary(formations.find(f => f.id_formation === formData.formation)!)}
                 className="absolute right-3 text-gray-400 hover:text-gray-600"
               >
                 <Search className="h-5 w-5" />
@@ -193,15 +317,18 @@ const SessionForm = () => {
                 <UserCircle className="h-5 w-5 text-gray-400" />
               </div>
               <select
-                value={formData.default_instructor_id}
-                onChange={(e) => handleDefaultInstructorChange(e.target.value)}
+                value={formData.formateur}
+                onChange={(e) => {
+                  console.log('ID du formateur sélectionné:', e.target.value); // Ajoute ce log
+                  handleDefaultInstructorChange(e.target.value);
+                }}
                 className="pl-10 input-field w-full"
                 required
               >
                 <option value="">Sélectionnez un formateur</option>
-                {instructors.map(instructor => (
-                  <option key={instructor.id} value={instructor.id}>
-                    {instructor.first_name} {instructor.last_name} ({instructor.tags.join(', ')})
+                {instructors.map((instructor) => (
+                  <option key={instructor.id_formateur} value={instructor.id_formateur}>
+                    {instructor.nom} {instructor.prenom} {Array.isArray(instructor.tags) ? `(${instructor.tags.join(', ')})` : ''}
                   </option>
                 ))}
               </select>
@@ -235,13 +362,13 @@ const SessionForm = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {formData.schedule.map((item, index) => (
+                  {formData.creneaux.map((item, index) => (
                     <tr key={index}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
                           type="date"
-                          value={item.date}
-                          onChange={(e) => handleScheduleChange(index, 'date', e.target.value)}
+                          value={item.jour}
+                          onChange={(e) => handleScheduleChange(index, 'jour', e.target.value)}
                           className="input-field w-full"
                           required
                         />
@@ -249,8 +376,8 @@ const SessionForm = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
                           type="time"
-                          value={item.start_time}
-                          onChange={(e) => handleScheduleChange(index, 'start_time', e.target.value)}
+                          value={item.heure_debut}
+                          onChange={(e) => handleScheduleChange(index, 'heure_debut', e.target.value)}
                           className="input-field w-full"
                           required
                         />
@@ -258,23 +385,26 @@ const SessionForm = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
                           type="time"
-                          value={item.end_time}
-                          onChange={(e) => handleScheduleChange(index, 'end_time', e.target.value)}
+                          value={item.heure_fin}
+                          onChange={(e) => handleScheduleChange(index, 'heure_fin', e.target.value)}
                           className="input-field w-full"
                           required
                         />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
-                          value={item.instructor_id}
-                          onChange={(e) => handleScheduleChange(index, 'instructor_id', e.target.value)}
+                          value={item.id_formateur}
+                          onChange={(e) => {
+                            console.log('ID du formateur sélectionné pour le créneau:', e.target.value); // Ajoute ce log
+                            handleScheduleChange(index, 'id_formateur', e.target.value);
+                          }}
                           className="input-field w-full"
                           required
                         >
                           <option value="">Sélectionnez un formateur</option>
-                          {instructors.map(instructor => (
-                            <option key={instructor.id} value={instructor.id}>
-                              {instructor.first_name} {instructor.last_name} ({instructor.tags.join(', ')})
+                          {instructors.map((instructor) => (
+                            <option key={instructor.id_formateur} value={instructor.id_formateur}>
+                              {instructor.nom} {instructor.prenom} {Array.isArray(instructor.tags) ? `(${instructor.tags.join(', ')})` : ''}
                             </option>
                           ))}
                         </select>
@@ -303,6 +433,26 @@ const SessionForm = () => {
             </button>
           </div>
 
+          {/* Nombre d'inscrits */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre d'inscrits
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <UserCircle className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="number"
+                value={formData.nb_inscrits}
+                onChange={(e) => setFormData({ ...formData, nb_inscrits: parseInt(e.target.value) })}
+                className="pl-10 input-field w-full"
+                placeholder="Nombre d'inscrits"
+                required
+              />
+            </div>
+          </div>
+
           {error && (
             <div className="p-4 bg-red-100 text-red-700 rounded-lg mt-4">
               <XCircle className="h-5 w-5 inline-block mr-2" />
@@ -322,11 +472,11 @@ const SessionForm = () => {
                 </div>
                 <input
                   type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  value={formData.lieu}
+                  onChange={(e) => setFormData({ ...formData, lieu: e.target.value })}
                   className="pl-10 input-field w-full"
                   placeholder="Ex: Salle 302"
-                  required
+                  required={formData.mode === 'presentiel'} // Champ obligatoire uniquement si le mode est "présentiel"
                 />
               </div>
             </div>
@@ -368,10 +518,11 @@ const SessionForm = () => {
                 </div>
                 <input
                   type="url"
-                  value={formData.video_link}
-                  onChange={(e) => setFormData({ ...formData, video_link: e.target.value })}
+                  value={formData.lien}
+                  onChange={(e) => setFormData({ ...formData, lien: e.target.value })}
                   className="pl-10 input-field w-full"
                   placeholder="Ex: https://meet.google.com/abc-defg-hij"
+                  required={formData.mode === 'distanciel'} // Champ obligatoire uniquement si le mode est "distanciel"
                 />
               </div>
             </div>
@@ -387,8 +538,8 @@ const SessionForm = () => {
                   </label>
                   <input
                     type="text"
-                    value={formData.responsable?.first_name || ''}
-                    onChange={(e) => setFormData({ ...formData, responsable: { ...formData.responsable, first_name: e.target.value } })}
+                    value={formData.responsable_prenom}
+                    onChange={(e) => setFormData({ ...formData, responsable_prenom: e.target.value })}
                     className="input-field w-full"
                     required
                   />
@@ -399,8 +550,8 @@ const SessionForm = () => {
                   </label>
                   <input
                     type="text"
-                    value={formData.responsable?.last_name || ''}
-                    onChange={(e) => setFormData({ ...formData, responsable: { ...formData.responsable, last_name: e.target.value } })}
+                    value={formData.responsable_nom}
+                    onChange={(e) => setFormData({ ...formData, responsable_nom: e.target.value })}
                     className="input-field w-full"
                     required
                   />
@@ -411,8 +562,8 @@ const SessionForm = () => {
                   </label>
                   <input
                     type="email"
-                    value={formData.responsable?.email || ''}
-                    onChange={(e) => setFormData({ ...formData, responsable: { ...formData.responsable, email: e.target.value } })}
+                    value={formData.responsable_email}
+                    onChange={(e) => setFormData({ ...formData, responsable_email: e.target.value })}
                     className="input-field w-full"
                     required
                   />
@@ -423,8 +574,8 @@ const SessionForm = () => {
                   </label>
                   <input
                     type="tel"
-                    value={formData.responsable?.phone || ''}
-                    onChange={(e) => setFormData({ ...formData, responsable: { ...formData.responsable, phone: e.target.value } })}
+                    value={formData.responsable_telephone}
+                    onChange={(e) => setFormData({ ...formData, responsable_telephone: e.target.value })}
                     className="input-field w-full"
                     required
                   />
