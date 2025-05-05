@@ -1,13 +1,24 @@
-import React, { useState } from 'react';
-import { Search, Filter, Plus, Mail, Phone, Building, X, CheckSquare, BookOpen, User, Trash } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Search, Filter, Plus, Mail, Phone, X, CheckSquare, BookOpen, User, Trash } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+interface Creneau {
+  jour: string;
+  heure_debut: string;
+  heure_fin: string;
+}
 
 interface Session {
-  id: string;
-  title: string;
-  date: string;
-  description: string;
-  tags: string[]; 
+  id_session: string;
+  titre: string;
+  description?: string;
+  lieu?: string;
+  nb_heures?: number;
+  nb_inscrits?: number;
+  creneaux: Creneau[];
 }
 
 interface Instructor {
@@ -16,12 +27,12 @@ interface Instructor {
   last_name: string;
   email: string;
   phone: string | null;
-  specialties: string[];
+  specialties: string;
   bio: string | null;
   is_active: boolean;
   sessions: Session[];
   linkedin: string;
-  cv_filename: string | null; // Nouveau champ pour le nom du fichier CV
+  cv_path: string | null;
 }
 
 const InstructorList = () => {
@@ -32,75 +43,78 @@ const InstructorList = () => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedInstructor, setSelectedInstructor] = useState<Instructor | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const [filteredInstructors, setFilteredInstructors] = useState<Instructor[]>([]);
+  const [specialties, setSpecialties] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     email: '',
     phone: '',
-    specialties: [] as string[],
+    specialties: '',
     bio: '',
     sessions: [] as Session[],
     linkedin: '',
-    cv_filename: null as string | null // Initialisation du champ CV
+    cv_path: null as string | null
   });
 
-  const [instructors, setInstructors] = useState<Instructor[]>([
-    {
-      id: '1',
-      first_name: 'Sophie',
-      last_name: 'Bernard',
-      email: 'sophie.bernard@formation.com',
-      phone: '0612345678',
-      specialties: ['React', 'JavaScript', 'TypeScript'],
-      bio: 'Experte en développement frontend avec 10 ans d\'expérience',
-      is_active: true,
-      sessions: [
-        { id: 's1', title: 'Introduction à React', date: '2023-01-15', description: 'Session de formation sur les bases de React' },
-        { id: 's2', title: 'Avancé JavaScript', date: '2023-02-20', description: 'Session de formation sur les concepts avancés de JavaScript' }
-      ],
-      linkedin: 'https://linkedin.com/in/sophiebernard',
-      cv_filename: 'CV_Sophie_Bernard.pdf' // Exemple de nom de fichier CV
-    },
-    {
-      id: '2',
-      first_name: 'Marc',
-      last_name: 'Dubois',
-      email: 'marc.dubois@formation.com',
-      phone: '0687654321',
-      specialties: ['Node.js', 'Express', 'MongoDB'],
-      bio: 'Spécialiste backend et architecte logiciel',
-      is_active: true,
-      sessions: [
-        { id: 's3', title: 'Introduction à Node.js', date: '2023-03-10', description: 'Session de formation sur les bases de Node.js' }
-      ],
-      linkedin: 'https://linkedin.com/in/marcdubois',
-      cv_filename: 'CV_Marc_Dubois.pdf' // Exemple de nom de fichier CV
-    }
-  ]);
+  useEffect(() => {
+    const fetchInstructors = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/formateur');
+        const data = response.data.map(instructor => ({
+          id: instructor.id_formateur,
+          first_name: instructor.prenom,
+          last_name: instructor.nom,
+          email: instructor.email,
+          phone: instructor.telephone,
+          specialties: instructor.specialites || '',
+          bio: instructor.bio,
+          is_active: instructor.est_actif,
+          sessions: instructor.sessions || [],
+          linkedin: instructor.linkedin || '',
+          cv_path: instructor.cv ? `http://localhost:8000/uploads/${instructor.cv}` : null,
+        }));
+        setInstructors(data);
+        setFilteredInstructors(data); // Initialisez également les instructeurs filtrés
 
-  const specialties = [
-    { id: 'all', name: 'Toutes les spécialités' },
-    { id: 'react', name: 'React' },
-    { id: 'javascript', name: 'JavaScript' },
-    { id: 'typescript', name: 'TypeScript' },
-    { id: 'nodejs', name: 'Node.js' },
-    { id: 'express', name: 'Express' },
-    { id: 'mongodb', name: 'MongoDB' }
-  ];
+        // Extraire les spécialités uniques et les normaliser
+        const uniqueSpecialties = Array.from(new Set(data.flatMap(instructor => instructor.specialties.split(',').map(specialty => specialty.trim().toLowerCase()))));
+        setSpecialties(uniqueSpecialties);
+      } catch (error) {
+        console.error('Erreur lors de la récupération des formateurs:', error);
+        toast.error('Erreur lors de la récupération des formateurs');
+      }
+    };
+
+    fetchInstructors();
+  }, []);
+
+  useEffect(() => {
+    // Filtrer les instructeurs en fonction du terme de recherche et de la spécialité sélectionnée
+    const filtered = instructors.filter(instructor => {
+      const matchesSearch = instructor.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            instructor.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            instructor.email.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSpecialty = selectedSpecialty === 'all' || instructor.specialties.split(',').map(specialty => specialty.trim().toLowerCase()).includes(selectedSpecialty.toLowerCase());
+      return matchesSearch && matchesSpecialty;
+    });
+    setFilteredInstructors(filtered);
+  }, [searchTerm, selectedSpecialty, instructors]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/pdf') {
       setSelectedFile(file);
-      setFormData(prev => ({ ...prev, cv_filename: file.name }));
+      setFormData(prev => ({ ...prev, cv_path: URL.createObjectURL(file) }));
     } else {
-      alert('Veuillez sélectionner un fichier PDF');
+      toast.error('Veuillez sélectionner un fichier PDF');
     }
   };
 
   const handleRemoveFile = () => {
     setSelectedFile(null);
-    setFormData(prev => ({ ...prev, cv_filename: null }));
+    setFormData(prev => ({ ...prev, cv_path: null }));
   };
 
   const handleAdd = () => {
@@ -109,11 +123,11 @@ const InstructorList = () => {
       last_name: '',
       email: '',
       phone: '',
-      specialties: [],
+      specialties: '',
       bio: '',
       sessions: [],
       linkedin: '',
-      cv_filename: null
+      cv_path: null
     });
     setSelectedFile(null);
     setIsAddModalOpen(true);
@@ -130,14 +144,23 @@ const InstructorList = () => {
       bio: instructor.bio || '',
       sessions: instructor.sessions,
       linkedin: instructor.linkedin,
-      cv_filename: instructor.cv_filename
+      cv_path: instructor.cv_path
     });
     setSelectedFile(null);
     setIsEditModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setInstructors(prevInstructors => prevInstructors.filter(instructor => instructor.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      const response = await axios.delete(`http://localhost:8000/formateur/${id}`);
+      if (response.status === 200) {
+        setInstructors(prevInstructors => prevInstructors.filter(instructor => instructor.id !== id));
+        toast.success('Formateur supprimé avec succès');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la suppression du formateur:', error);
+      toast.error('Erreur lors de la suppression du formateur');
+    }
   };
 
   const handleViewDetails = (instructor: Instructor) => {
@@ -145,21 +168,88 @@ const InstructorList = () => {
     setIsDetailsModalOpen(true);
   };
 
-  const handleSpecialtyToggle = (specialty: string) => {
-    setFormData(prev => {
-      const specialties = prev.specialties;
-      if (specialties.includes(specialty)) {
-        return {
-          ...prev,
-          specialties: specialties.filter(s => s !== specialty)
-        };
-      } else {
-        return {
-          ...prev,
-          specialties: [...specialties, specialty]
-        };
-      }
-    });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const data = new FormData();
+    data.append('nom', formData.last_name);
+    data.append('prenom', formData.first_name);
+    data.append('email', formData.email);
+    data.append('telephone', formData.phone);
+    data.append('specialites', formData.specialties);
+    data.append('bio', formData.bio);
+    data.append('linkedin', formData.linkedin);
+    if (selectedFile) {
+      data.append('cv', selectedFile);
+    }
+  
+    try {
+      const response = await axios.post('http://localhost:8000/formateur', data);
+      const newInstructor = {
+        id: response.data.formateur.id_formateur,
+        first_name: response.data.formateur.prenom,
+        last_name: response.data.formateur.nom,
+        email: response.data.formateur.email,
+        phone: response.data.formateur.telephone,
+        specialties: response.data.formateur.specialites,
+        bio: response.data.formateur.bio,
+        is_active: response.data.formateur.est_actif,
+        sessions: [],
+        linkedin: response.data.formateur.linkedin,
+        cv_path: response.data.formateur.cv_path ? `http://localhost:8000/uploads/${response.data.formateur.cv_path}` : null
+      };
+      setInstructors(prevInstructors => [...prevInstructors, newInstructor]);
+      setFilteredInstructors(prevInstructors => [...prevInstructors, newInstructor]); // Mettre à jour filteredInstructors
+      setIsAddModalOpen(false);
+      toast.success('Formateur ajouté avec succès');
+    } catch (error) {
+      console.error('Erreur lors de la soumission du formulaire:', error);
+      toast.error('Erreur lors de la soumission du formulaire');
+    }
+  };
+  
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedInstructor) return;
+
+    const data = new FormData();
+    data.append('nom', formData.last_name);
+    data.append('prenom', formData.first_name);
+    data.append('email', formData.email);
+    data.append('telephone', formData.phone);
+    data.append('specialites', formData.specialties);
+    data.append('bio', formData.bio);
+    data.append('linkedin', formData.linkedin); // Ajoutez cette ligne
+    if (selectedFile) {
+      data.append('cv', selectedFile);
+    }
+
+    try {
+      const response = await axios.post(`http://localhost:8000/formateur/${selectedInstructor.id}`, data);
+      const updatedInstructor = {
+        id: response.data.formateur.id_formateur,
+        first_name: response.data.formateur.prenom,
+        last_name: response.data.formateur.nom,
+        email: response.data.formateur.email,
+        phone: response.data.formateur.telephone,
+        specialties: response.data.formateur.specialites,
+        bio: response.data.formateur.bio,
+        is_active: response.data.formateur.est_actif,
+        sessions: [],
+        linkedin: response.data.formateur.linkedin,
+        cv_path: response.data.formateur.cv_path ? `http://localhost:8000/uploads/${response.data.formateur.cv_path}` : null
+      };
+      setInstructors(prevInstructors =>
+        prevInstructors.map(instructor =>
+          instructor.id === selectedInstructor.id ? updatedInstructor : instructor
+        )
+      );
+      setIsEditModalOpen(false);
+      toast.success('Formateur mis à jour avec succès');
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du formateur:', error);
+      toast.error('Erreur lors de la mise à jour du formateur');
+    }
   };
 
   const renderForm = (onSubmit: (e: React.FormEvent) => void, isEdit: boolean) => (
@@ -212,8 +302,21 @@ const InstructorList = () => {
             className="input-field"
           />
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Spécialités
+          </label>
+          <input
+            type="text"
+            value={formData.specialties}
+            onChange={(e) => setFormData({ ...formData, specialties: e.target.value })}
+            className="input-field"
+            placeholder="Séparées par des virgules"
+            required
+          />
+        </div>
       </div>
-  
+
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -225,26 +328,8 @@ const InstructorList = () => {
             className="input-field h-24 resize-none"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Spécialités
-          </label>
-          <div className="space-y-2">
-            {specialties.slice(1).map(specialty => (
-              <label key={specialty.id} className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={formData.specialties.includes(specialty.name)}
-                  onChange={() => handleSpecialtyToggle(specialty.name)}
-                  className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
-                />
-                <span className="text-sm text-gray-700">{specialty.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
       </div>
-  
+
       <div className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -262,9 +347,9 @@ const InstructorList = () => {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             CV (PDF)
           </label>
-          {formData.cv_filename ? (
+          {formData.cv_path ? (
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-700">{formData.cv_filename}</span>
+              <span className="text-gray-700">{formData.cv_path.split('/').pop()}</span>
               <button
                 type="button"
                 onClick={handleRemoveFile}
@@ -313,7 +398,7 @@ const InstructorList = () => {
           )}
         </div>
       </div>
-  
+
       <div className="md:col-span-3 flex justify-end space-x-4 pt-4">
         <button
           type="button"
@@ -329,8 +414,6 @@ const InstructorList = () => {
       </div>
     </form>
   );
-  
-  
 
   return (
     <div className="space-y-8">
@@ -366,9 +449,10 @@ const InstructorList = () => {
                 value={selectedSpecialty}
                 onChange={(e) => setSelectedSpecialty(e.target.value)}
               >
-                {specialties.map(specialty => (
-                  <option key={specialty.id} value={specialty.id}>
-                    {specialty.name}
+                <option value="all">Toutes les spécialités</option>
+                {specialties.map((specialty, index) => (
+                  <option key={index} value={specialty}>
+                    {specialty}
                   </option>
                 ))}
               </select>
@@ -401,7 +485,7 @@ const InstructorList = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {instructors.map((instructor) => (
+              {filteredInstructors.map((instructor) => (
                 <tr
                   key={instructor.id}
                   className="hover:bg-gray-50 cursor-pointer"
@@ -428,14 +512,16 @@ const InstructorList = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-2">
-                      {instructor.specialties.map((specialty, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 text-xs font-medium bg-primary bg-opacity-10 text-primary rounded-full"
-                        >
-                          {specialty}
-                        </span>
-                      ))}
+                      {instructor.specialties && typeof instructor.specialties === 'string'
+                        ? instructor.specialties.split(',').map((specialty, index) => (
+                            <span
+                              key={index}
+                              className="px-2 py-1 text-xs font-medium bg-primary bg-opacity-10 text-primary rounded-full"
+                            >
+                              {specialty.trim()}
+                            </span>
+                          ))
+                        : null}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -483,7 +569,7 @@ const InstructorList = () => {
                 <X className="h-6 w-6" />
               </button>
             </div>
-            {renderForm(() => {}, false)}
+            {renderForm(handleSubmit, false)}
           </div>
         </div>
       )}
@@ -501,7 +587,7 @@ const InstructorList = () => {
                 <X className="h-6 w-6" />
               </button>
             </div>
-            {renderForm(() => {}, true)}
+            {renderForm(handleUpdate, true)}
           </div>
         </div>
       )}
@@ -552,14 +638,16 @@ const InstructorList = () => {
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Spécialités</h4>
                   <div className="flex flex-wrap gap-2">
-                    {selectedInstructor.specialties.map((specialty, index) => (
-                      <span
-                        key={index}
-                        className="px-3 py-1 bg-primary bg-opacity-10 text-primary rounded-full text-sm"
-                      >
-                        {specialty}
-                      </span>
-                    ))}
+                    {selectedInstructor.specialties && typeof selectedInstructor.specialties === 'string'
+                      ? selectedInstructor.specialties.split(',').map((specialty, index) => (
+                          <span
+                            key={index}
+                            className="px-3 py-1 bg-primary bg-opacity-10 text-primary rounded-full text-sm"
+                          >
+                            {specialty.trim()}
+                          </span>
+                        ))
+                      : null}
                   </div>
                 </div>
 
@@ -580,27 +668,51 @@ const InstructorList = () => {
                 )}
 
                 <div className="md:col-span-2">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Documents</h4>
-                  <div className="flex items-center space-x-2">
-                    <BookOpen className="h-5 w-5 text-gray-400" />
-                    <span className="text-gray-600">{selectedInstructor.cv_filename}</span>
-                    <button className="text-primary hover:text-primary-dark">
-                      Télécharger
-                    </button>
-                  </div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">CV</h4>
+                  {selectedInstructor.cv_path ? (
+                    <div className="flex items-center space-x-2">
+                      <BookOpen className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-600">{selectedInstructor.cv_path.split('/').pop()}</span>
+                      <a
+                        href={selectedInstructor.cv_path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:text-primary-dark"
+                      >
+                        Télécharger
+                      </a>
+                    </div>
+                  ) : (
+                    <p className="text-gray-600">Aucun CV disponible</p>
+                  )}
                 </div>
 
                 <div className="md:col-span-2">
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Historique des sessions</h4>
-                  <div className="space-y-4">
-                    {selectedInstructor.sessions.map(session => (
-                      <div key={session.id} className="border p-4 rounded-lg shadow-sm">
-                        <h5 className="text-lg font-semibold">{session.title}</h5>
-                        <p className="text-gray-600">{session.date}</p>
-                        <p className="text-gray-700">{session.description}</p>
-                      </div>
-                    ))}
-                  </div>
+                  {selectedInstructor.sessions.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {selectedInstructor.sessions.map((session) => (
+                        <div key={session.id_session} className="border border-gray-200 p-3 rounded-lg shadow-sm bg-white">
+                          <h5 className="text-base font-semibold text-gray-900">{session.titre}</h5>
+                          {session.description && <p className="text-gray-600 mt-1 text-sm">{session.description}</p>}
+                          {session.lieu && <p className="text-gray-700 mt-1 text-sm">Lieu: {session.lieu}</p>}
+                          {session.nb_heures && <p className="text-gray-700 mt-1 text-sm">Durée: {session.nb_heures} heures</p>}
+                          {session.nb_inscrits && <p className="text-gray-700 mt-1 text-sm">Nombre d'inscrits: {session.nb_inscrits}</p>}
+                          <h6 className="text-sm font-semibold mt-2 text-gray-800">Créneaux</h6>
+                          <div className="space-y-1 mt-1">
+                            {session.creneaux.map((creneau, index) => (
+                              <div key={index} className="flex justify-between bg-gray-100 p-1 rounded text-xs">
+                                <span className="text-gray-700">{creneau.jour}</span>
+                                <span className="text-gray-700">{creneau.heure_debut} - {creneau.heure_fin}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-600">Aucune session disponible.</p>
+                  )}
                 </div>
               </div>
             </div>
