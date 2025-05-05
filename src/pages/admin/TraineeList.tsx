@@ -1,191 +1,237 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Filter, Plus, Mail, Phone, Building, X, CheckSquare, User } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { toast } from 'react-toastify';
+import AddTraineeModal from './modal_traineelist/AddTraineeModal';
+import EditTraineeModal from './modal_traineelist/EditTraineeModal';
+import TraineeDetailsModal from './modal_traineelist/TraineeDetailsModal';
+import TraineeForm from './modal_traineelist/TraineeForm';
 
 interface Session {
   id: string;
-  title: string;
+  titre: string;
   date: string;
   description: string;
 }
 
-interface Company {
-  id: string;
-  name: string;
-}
-
 interface Trainee {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string | null;
-  function: string | null;
-  company: Company;
-  sessions: Session[];
+  id_stagiaire: number;
+  nom_stagiaire: string;
+  prenom_stagiaire: string;
+  telephone_stagiaire: string | null;
+  email_stagiaire: string;
+  entreprise_stagiaire?: string;
+  fonction_stagiaire?: string;
+  sessions?: Session[];
 }
 
 interface TraineeFormData {
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  function: string;
-  company_name: string;
+  prenom_stagiaire: string;
+  nom_stagiaire: string;
+  email_stagiaire: string;
+  telephone_stagiaire: string;
+  entreprise_stagiaire: string;
+  fonction_stagiaire: string;
   sessions: Session[];
 }
 
 const TraineeList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSession, setSelectedSession] = useState('all');
-  const [trainees, setTrainees] = useState<Trainee[]>([
-    {
-      id: uuidv4(),
-      first_name: 'Alice',
-      last_name: 'Dupont',
-      email: 'alice.dupont@example.com',
-      phone: '0612345678',
-      function: 'Développeur Frontend',
-      company: { id: uuidv4(), name: 'TechCorp' },
-      sessions: [
-        { id: '1', title: 'Formation React Avancé', date: '2023-10-01', description: 'Cours avancé sur React' }
-      ]
-    },
-    {
-      id: uuidv4(),
-      first_name: 'Bob',
-      last_name: 'Martin',
-      email: 'bob.martin@example.com',
-      phone: '0687654321',
-      function: 'Chef de projet',
-      company: { id: uuidv4(), name: 'Digital Solutions' },
-      sessions: [
-        { id: '2', title: 'JavaScript Moderne', date: '2023-10-05', description: 'Introduction à JavaScript moderne' }
-      ]
-    },
-    {
-      id: uuidv4(),
-      first_name: 'Charlie',
-      last_name: 'Brown',
-      email: 'charlie.brown@example.com',
-      phone: null,
-      function: 'Analyste de données',
-      company: { id: uuidv4(), name: 'Data Insights' },
-      sessions: [
-        { id: '3', title: 'Node.js Fondamentaux', date: '2023-10-10', description: 'Introduction à Node.js' }
-      ]
-    }
-  ]);
+  const [trainees, setTrainees] = useState<Trainee[]>([]);
+  const [availableSessions, setAvailableSessions] = useState<Session[]>([]);
+  const [sessions, setSessions] = useState<{ id: string; name: string }[]>([]);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedTrainee, setSelectedTrainee] = useState<Trainee | null>(null);
   const [editFormData, setEditFormData] = useState<TraineeFormData>({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    function: '',
-    company_name: '',
+    prenom_stagiaire: '',
+    nom_stagiaire: '',
+    email_stagiaire: '',
+    telephone_stagiaire: '',
+    entreprise_stagiaire: '',
+    fonction_stagiaire: '',
     sessions: []
   });
   const [addFormData, setAddFormData] = useState<TraineeFormData>({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    function: '',
-    company_name: '',
+    prenom_stagiaire: '',
+    nom_stagiaire: '',
+    email_stagiaire: '',
+    telephone_stagiaire: '',
+    entreprise_stagiaire: '',
+    fonction_stagiaire: '',
     sessions: []
   });
 
-  const [selectedTrainees, setSelectedTrainees] = useState<string[]>([]);
+  const [selectedTrainees, setSelectedTrainees] = useState<number[]>([]);
 
-  const availableSessions = [
-    { id: '1', title: 'Formation React Avancé', date: '2023-10-01', description: 'Cours avancé sur React' },
-    { id: '2', title: 'JavaScript Moderne', date: '2023-10-05', description: 'Introduction à JavaScript moderne' },
-    { id: '3', title: 'Node.js Fondamentaux', date: '2023-10-10', description: 'Introduction à Node.js' }
-  ];
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [traineesResponse, sessionsResponse, inscriptionsResponse] = await Promise.all([
+          fetch('http://localhost:8000/stagiaires'),
+          fetch('http://localhost:8000/sessionformation'),
+          fetch('http://localhost:8000/inscriptions')
+        ]);
 
-  const sessions = [
-    { id: 'all', name: 'Toutes les sessions' },
-    { id: '1', name: 'Formation React Avancé' },
-    { id: '2', name: 'JavaScript Moderne' },
-    { id: '3', name: 'Node.js Fondamentaux' }
-  ];
+        if (!traineesResponse.ok) throw new Error('Failed to fetch trainees');
+        if (!sessionsResponse.ok) throw new Error('Failed to fetch sessions');
+        if (!inscriptionsResponse.ok) throw new Error('Failed to fetch inscriptions');
+
+        const traineesData = await traineesResponse.json();
+        const sessionsData = await sessionsResponse.json();
+        const inscriptionsData = await inscriptionsResponse.json();
+
+        console.log('Fetched trainees data:', traineesData); // Log fetched trainees data
+        console.log('Fetched sessions data:', sessionsData); // Log fetched sessions data
+        console.log('Fetched inscriptions data:', inscriptionsData); // Log fetched inscriptions data
+
+        setAvailableSessions(sessionsData);
+        setSessions([{ id: 'all', name: 'Toutes les sessions' }, ...sessionsData.map(session => ({ id: session.id_session, name: session.titre }))]);
+
+        const updatedTrainees = traineesData.map(trainee => {
+          const traineeSessions = inscriptionsData
+            .filter(inscription => inscription.stagiaire.id_stagiaire === trainee.id_stagiaire)
+            .map(inscription => ({
+              id: inscription.session.id_session,
+              titre: inscription.session.nom_session,
+              date: '', // Add date if available
+              description: '' // Add description if available
+            }));
+
+          return {
+            ...trainee,
+            sessions: traineeSessions
+          };
+        });
+
+        console.log('Updated trainees with sessions:', updatedTrainees); // Log updated trainees with sessions
+
+        setTrainees(updatedTrainees);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast.error('Erreur lors de la récupération des données');
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const handleEdit = (trainee: Trainee) => {
+    console.log('Editing trainee:', trainee); // Log trainee being edited
     setSelectedTrainee(trainee);
     setEditFormData({
-      first_name: trainee.first_name,
-      last_name: trainee.last_name,
-      email: trainee.email,
-      phone: trainee.phone || '',
-      function: trainee.function || '',
-      company_name: trainee.company.name,
-      sessions: trainee.sessions
+      id_stagiaire: trainee.id_stagiaire, // Ajouter l'ID ici
+      prenom_stagiaire: trainee.prenom_stagiaire,
+      nom_stagiaire: trainee.nom_stagiaire,
+      email_stagiaire: trainee.email_stagiaire,
+      telephone_stagiaire: trainee.telephone_stagiaire || '',
+      entreprise_stagiaire: trainee.entreprise_stagiaire || '',
+      fonction_stagiaire: trainee.fonction_stagiaire || '',
+      sessions: trainee.sessions || [],
     });
+
+    console.log('Edit form data set:', editFormData); // Log edit form data
+
     setIsEditModalOpen(true);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTrainee) return;
 
     const updatedTrainee: Trainee = {
       ...selectedTrainee,
-      first_name: editFormData.first_name,
-      last_name: editFormData.last_name,
-      email: editFormData.email,
-      phone: editFormData.phone,
-      function: editFormData.function,
-      company: {
-        id: selectedTrainee.company.id,
-        name: editFormData.company_name
-      },
+      prenom_stagiaire: editFormData.prenom_stagiaire,
+      nom_stagiaire: editFormData.nom_stagiaire,
+      email_stagiaire: editFormData.email_stagiaire,
+      telephone_stagiaire: editFormData.telephone_stagiaire,
+      entreprise_stagiaire: editFormData.entreprise_stagiaire,
+      fonction_stagiaire: editFormData.fonction_stagiaire,
       sessions: editFormData.sessions
     };
 
-    setTrainees(trainees.map(t => t.id === selectedTrainee.id ? updatedTrainee : t));
-    setIsEditModalOpen(false);
+    console.log('Updated trainee data:', updatedTrainee); // Log updated trainee data
+
+    try {
+      await fetch(`http://localhost:8000/stagiaires/updates/${selectedTrainee.id_stagiaire}`, {
+        method: 'POST', // Utiliser POST au lieu de PUT
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updatedTrainee)
+      });
+      setTrainees(trainees.map(t => t.id_stagiaire === selectedTrainee.id_stagiaire ? updatedTrainee : t));
+      setIsEditModalOpen(false);
+      toast.success('Stagiaire mis à jour avec succès');
+    } catch (error) {
+      console.error('Error updating trainee:', error);
+      toast.error('Erreur lors de la mise à jour du stagiaire');
+    }
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const newTrainee: Trainee = {
-      id: uuidv4(),
-      first_name: addFormData.first_name,
-      last_name: addFormData.last_name,
-      email: addFormData.email,
-      phone: addFormData.phone,
-      function: addFormData.function,
-      company: {
-        id: uuidv4(),
-        name: addFormData.company_name
-      },
-      sessions: addFormData.sessions
-    };
+    const formDataToSend = new FormData();
+    formDataToSend.append('nom_stagiaire', addFormData.nom_stagiaire);
+    formDataToSend.append('prenom_stagiaire', addFormData.prenom_stagiaire);
+    formDataToSend.append('telephone_stagiaire', addFormData.telephone_stagiaire);
+    formDataToSend.append('email_stagiaire', addFormData.email_stagiaire);
+    formDataToSend.append('entreprise_stagiaire', addFormData.entreprise_stagiaire);
+    formDataToSend.append('fonction_stagiaire', addFormData.fonction_stagiaire);
+    formDataToSend.append('id_session', JSON.stringify(addFormData.sessions)); // Assuming sessions are passed here
 
-    setTrainees([...trainees, newTrainee]);
-    setIsAddModalOpen(false);
-    setAddFormData({
-      first_name: '',
-      last_name: '',
-      email: '',
-      phone: '',
-      function: '',
-      company_name: '',
-      sessions: []
-    });
+    console.log('Add form data to send:', Object.fromEntries(formDataToSend.entries())); // Log add form data to send
+
+    try {
+      const response = await fetch('http://localhost:8000/stagiaires', {
+        method: 'POST',
+        body: formDataToSend,
+      });
+
+      if (response.ok) {
+        const newTrainee = await response.json();
+        console.log('New trainee added:', newTrainee); // Log the new trainee data
+
+        // Update the state with the new trainee
+        setTrainees(prevTrainees => [...prevTrainees, newTrainee]);
+        setIsAddModalOpen(false);
+        setAddFormData({
+          prenom_stagiaire: '',
+          nom_stagiaire: '',
+          email_stagiaire: '',
+          telephone_stagiaire: '',
+          entreprise_stagiaire: '',
+          fonction_stagiaire: '',
+          sessions: [],
+        });
+        toast.success('Stagiaire ajouté avec succès');
+      } else {
+        throw new Error('Failed to add trainee');
+      }
+    } catch (error) {
+      console.error('Error adding trainee:', error);
+      toast.error('Erreur lors de l\'ajout du stagiaire');
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: number) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce stagiaire ?')) {
-      setTrainees(trainees.filter(t => t.id !== id));
+      try {
+        await fetch(`http://localhost:8000/stagiaires/${id}`, {
+          method: 'DELETE'
+        });
+        setTrainees(trainees.filter(t => t.id_stagiaire !== id));
+        toast.success('Stagiaire supprimé avec succès');
+      } catch (error) {
+        console.error('Error deleting trainee:', error);
+        toast.error('Erreur lors de la suppression du stagiaire');
+      }
     }
   };
 
@@ -193,10 +239,10 @@ const TraineeList = () => {
     const updateFormData = isEdit ? setEditFormData : setAddFormData;
     updateFormData(prev => {
       const sessions = prev.sessions;
-      if (sessions.some(s => s.id === session.id)) {
+      if (sessions.some(s => s.id === session.id_session)) {
         return {
           ...prev,
-          sessions: sessions.filter(s => s.id !== session.id)
+          sessions: sessions.filter(s => s.id !== session.id_session)
         };
       } else {
         return {
@@ -226,16 +272,13 @@ const TraineeList = () => {
             header: true,
             complete: (results) => {
               parsedData = results.data.map((row: any) => ({
-                id: uuidv4(),
-                first_name: row.first_name,
-                last_name: row.last_name,
-                email: row.email,
-                phone: row.phone || null,
-                function: row.function || null,
-                company: {
-                  id: uuidv4(),
-                  name: row.company_name
-                },
+                id_stagiaire: uuidv4(),
+                prenom_stagiaire: row.prenom_stagiaire,
+                nom_stagiaire: row.nom_stagiaire,
+                email_stagiaire: row.email_stagiaire,
+                telephone_stagiaire: row.telephone_stagiaire || null,
+                entreprise_stagiaire: row.entreprise_stagiaire || null,
+                fonction_stagiaire: row.fonction_stagiaire || null,
                 sessions: row.sessions ? JSON.parse(row.sessions) : []
               }));
               checkForDuplicatesAndUpdate(parsedData);
@@ -247,27 +290,23 @@ const TraineeList = () => {
           const worksheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-          // Assurez-vous que les colonnes sont dans le bon ordre
           const headerRow = jsonData[0] as string[];
-          const firstNameIndex = headerRow.indexOf('first_name');
-          const lastNameIndex = headerRow.indexOf('last_name');
-          const emailIndex = headerRow.indexOf('email');
-          const phoneIndex = headerRow.indexOf('phone');
-          const functionIndex = headerRow.indexOf('function');
-          const companyNameIndex = headerRow.indexOf('company_name');
+          const prenomIndex = headerRow.indexOf('prenom_stagiaire');
+          const nomIndex = headerRow.indexOf('nom_stagiaire');
+          const emailIndex = headerRow.indexOf('email_stagiaire');
+          const telephoneIndex = headerRow.indexOf('telephone_stagiaire');
+          const entrepriseIndex = headerRow.indexOf('entreprise_stagiaire');
+          const fonctionIndex = headerRow.indexOf('fonction_stagiaire');
           const sessionsIndex = headerRow.indexOf('sessions');
 
           parsedData = jsonData.slice(1).map((row: any) => ({
-            id: uuidv4(),
-            first_name: row[firstNameIndex],
-            last_name: row[lastNameIndex],
-            email: row[emailIndex],
-            phone: row[phoneIndex] || null,
-            function: row[functionIndex] || null,
-            company: {
-              id: uuidv4(),
-              name: row[companyNameIndex]
-            },
+            id_stagiaire: uuidv4(),
+            prenom_stagiaire: row[prenomIndex],
+            nom_stagiaire: row[nomIndex],
+            email_stagiaire: row[emailIndex],
+            telephone_stagiaire: row[telephoneIndex] || null,
+            entreprise_stagiaire: row[entrepriseIndex] || null,
+            fonction_stagiaire: row[fonctionIndex] || null,
             sessions: row[sessionsIndex] ? JSON.parse(row[sessionsIndex]) : []
           }));
 
@@ -279,20 +318,21 @@ const TraineeList = () => {
   };
 
   const checkForDuplicatesAndUpdate = (newTrainees: Trainee[]) => {
-    const existingEmails = trainees.map(trainee => trainee.email);
-    const duplicateEmails = newTrainees.filter(trainee => existingEmails.includes(trainee.email));
+    const existingEmails = trainees.map(trainee => trainee.email_stagiaire);
+    const duplicateEmails = newTrainees.filter(trainee => existingEmails.includes(trainee.email_stagiaire));
 
     if (duplicateEmails.length > 0) {
-      alert(`Les emails suivants existent déjà : ${duplicateEmails.map(trainee => trainee.email).join(', ')}`);
-      // Filtrer les nouveaux stagiaires pour enlever les doublons
-      const uniqueTrainees = newTrainees.filter(trainee => !existingEmails.includes(trainee.email));
+      alert(`Les emails suivants existent déjà : ${duplicateEmails.map(trainee => trainee.email_stagiaire).join(', ')}`);
+      const uniqueTrainees = newTrainees.filter(trainee => !existingEmails.includes(trainee.email_stagiaire));
       setTrainees([...trainees, ...uniqueTrainees]);
+      toast.success(`${uniqueTrainees.length} stagiaires ajoutés avec succès`);
     } else {
       setTrainees([...trainees, ...newTrainees]);
+      toast.success(`${newTrainees.length} stagiaires ajoutés avec succès`);
     }
   };
 
-  const handleTraineeToggle = (traineeId: string) => {
+  const handleTraineeToggle = (traineeId: number) => {
     setSelectedTrainees(prev =>
       prev.includes(traineeId) ? prev.filter(id => id !== traineeId) : [...prev, traineeId]
     );
@@ -300,478 +340,250 @@ const TraineeList = () => {
 
   const handleAddTraineesToSession = (sessionId: string) => {
     const updatedTrainees = trainees.map(trainee =>
-      selectedTrainees.includes(trainee.id)
-        ? { ...trainee, sessions: [...trainee.sessions, availableSessions.find(s => s.id === sessionId)!] }
+      selectedTrainees.includes(trainee.id_stagiaire)
+        ? { ...trainee, sessions: [...trainee.sessions || [], availableSessions.find(s => s.id === sessionId)!] }
         : trainee
     );
     setTrainees(updatedTrainees);
     setSelectedTrainees([]);
+    toast.success('Stagiaires ajoutés à la session avec succès');
   };
 
   const filteredTrainees = trainees.filter(trainee => {
-    const matchesSearch = trainee.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         trainee.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         trainee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         trainee.company.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = trainee.prenom_stagiaire.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         trainee.nom_stagiaire.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         trainee.email_stagiaire.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesSession = selectedSession === 'all' ||
-                          trainee.sessions.some(s => s.title.toLowerCase().includes(selectedSession.toLowerCase()));
+                          (trainee.sessions || []).some(s => s.titre.toLowerCase().includes(selectedSession.toLowerCase()));
     return matchesSearch && matchesSession;
   });
 
-  const renderForm = (formData: TraineeFormData, setFormData: React.Dispatch<React.SetStateAction<TraineeFormData>>, isEdit: boolean) => (
-    <div className="p-6 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Prénom
+  return (
+    <div className="space-y-8 p-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-gray-900">Liste des Stagiaires</h1>
+        <div className="flex space-x-4">
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="bg-primary text-white px-4 py-2 rounded-md flex items-center space-x-2 hover:bg-primary-dark"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Ajouter un stagiaire</span>
+          </button>
+          <label className="bg-secondary text-white px-4 py-2 rounded-md flex items-center space-x-2 cursor-pointer hover:bg-secondary-dark">
+            <Plus className="h-4 w-4" />
+            <span>Importer</span>
+            <input
+              type="file"
+              accept=".csv, .xlsx, .xls"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
           </label>
-          <input
-            type="text"
-            value={formData.first_name}
-            onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-            className="input-field border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Nom
-          </label>
-          <input
-            type="text"
-            value={formData.last_name}
-            onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-            className="input-field border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            required
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Email
-        </label>
-        <input
-          type="email"
-          value={formData.email}
-          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          className="input-field border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-          required
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Téléphone
-        </label>
-        <input
-          type="tel"
-          value={formData.phone}
-          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-          className="input-field border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Entreprise
-        </label>
-        <input
-          type="text"
-          value={formData.company_name}
-          onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-          className="input-field border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-          placeholder="Nom de l'entreprise"
-          required
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Fonction
-        </label>
-        <input
-          type="text"
-          value={formData.function}
-          onChange={(e) => setFormData({ ...formData, function: e.target.value })}
-          className="input-field border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Sessions
-        </label>
-        <div className="space-y-2">
-          {availableSessions.map(session => (
-            <label key={session.id} className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={formData.sessions.some(s => s.id === session.id)}
-                onChange={() => handleSessionToggle(session, isEdit)}
-                className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
-              />
-              <span className="text-sm text-gray-700">{session.title}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-  
-    return (
-      <div className="space-y-8 p-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Liste des Stagiaires</h1>
-          <div className="flex space-x-4">
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-primary text-white px-4 py-2 rounded-md flex items-center space-x-2 hover:bg-primary-dark"
+          {selectedTrainees.length > 0 && (
+            <select
+              className="border border-gray-300 rounded-md px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              onChange={(e) => handleAddTraineesToSession(e.target.value)}
+              defaultValue=""
             >
-              <Plus className="h-4 w-4" />
-              <span>Ajouter un stagiaire</span>
-            </button>
-            <label className="bg-secondary text-white px-4 py-2 rounded-md flex items-center space-x-2 cursor-pointer hover:bg-secondary-dark">
-              <Plus className="h-4 w-4" />
-              <span>Importer</span>
-              <input
-                type="file"
-                accept=".csv, .xlsx, .xls"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </label>
-            {selectedTrainees.length > 0 && (
+              <option value="" disabled>Ajouter à une session</option>
+              {availableSessions.map(session => (
+                <option key={session.id_session} value={session.id_session}>
+                  {session.titre}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <input
+                  type="text"
+                  placeholder="Rechercher un stagiaire..."
+                  className="pl-10 border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="w-64">
               <select
-                className="border border-gray-300 rounded-md px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                onChange={(e) => handleAddTraineesToSession(e.target.value)}
-                defaultValue=""
+                className="border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                value={selectedSession}
+                onChange={(e) => setSelectedSession(e.target.value)}
               >
-                <option value="" disabled>Ajouter à une session</option>
-                {availableSessions.map(session => (
-                  <option key={session.id} value={session.id}>
-                    {session.title}
+                {sessions.map(session => (
+                  <option key={session.id_session} value={session.id_session}>
+                    {session.name}
                   </option>
                 ))}
               </select>
-            )}
+            </div>
+            <button className="bg-secondary text-white px-4 py-2 rounded-md flex items-center space-x-2 hover:bg-secondary-dark">
+              <Filter className="h-4 w-4" />
+              <span>Filtres</span>
+            </button>
           </div>
         </div>
-  
-        <div className="bg-white rounded-lg shadow-md">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex flex-wrap gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <input
-                    type="text"
-                    placeholder="Rechercher un stagiaire..."
-                    className="pl-10 border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    type="checkbox"
+                    checked={selectedTrainees.length === filteredTrainees.length}
+                    onChange={(e) =>
+                      setSelectedTrainees(e.target.checked ? filteredTrainees.map(t => t.id_stagiaire) : [])
+                    }
+                    className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
                   />
-                </div>
-              </div>
-              <div className="w-64">
-                <select
-                  className="border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  value={selectedSession}
-                  onChange={(e) => setSelectedSession(e.target.value)}
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Stagiaire
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Contact
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Entreprise
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Fonction
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Sessions
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredTrainees.map((trainee) => (
+                <tr
+                  key={trainee.id_stagiaire} // Utilisez une clé unique ici
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={(e) => {
+                    if (!e.target.closest('input[type="checkbox"]')) {
+                      handleViewDetails(trainee);
+                    }
+                  }}
                 >
-                  {sessions.map(session => (
-                    <option key={session.id} value={session.id}>
-                      {session.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button className="bg-secondary text-white px-4 py-2 rounded-md flex items-center space-x-2 hover:bg-secondary-dark">
-                <Filter className="h-4 w-4" />
-                <span>Filtres</span>
-              </button>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <input
                       type="checkbox"
-                      checked={selectedTrainees.length === filteredTrainees.length}
-                      onChange={(e) =>
-                        setSelectedTrainees(e.target.checked ? filteredTrainees.map(t => t.id) : [])
-                      }
+                      checked={selectedTrainees.includes(trainee.id_stagiaire)}
+                      onChange={() => handleTraineeToggle(trainee.id_stagiaire)}
                       className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
                     />
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Stagiaire
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contact
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Entreprise
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fonction
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Sessions
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredTrainees.map((trainee) => (
-                  <tr
-                    key={trainee.id}
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={(e) => {
-                      if (!e.target.closest('input[type="checkbox"]')) {
-                        handleViewDetails(trainee);
-                      }
-                    }}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        checked={selectedTrainees.includes(trainee.id)}
-                        onChange={() => handleTraineeToggle(trainee.id)}
-                        className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
-                      />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {trainee.first_name} {trainee.last_name}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {trainee.prenom_stagiaire} {trainee.nom_stagiaire}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col space-y-1">
+                      <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        <Mail className="h-4 w-4" />
+                        <span>{trainee.email_stagiaire}</span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col space-y-1">
+                      {trainee.telephone_stagiaire && (
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <Mail className="h-4 w-4" />
-                          <span>{trainee.email}</span>
-                        </div>
-                        {trainee.phone && (
-                          <div className="flex items-center space-x-2 text-sm text-gray-600">
-                            <Phone className="h-4 w-4" />
-                            <span>{trainee.phone}</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-2">
-                        <Building className="h-4 w-4 text-gray-400" />
-                        <div className="text-sm text-gray-900">{trainee.company.name}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{trainee.function}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-2">
-                        {trainee.sessions.map((session, index) => (
-                          <span
-                            key={index}
-                            className="px-2 py-1 text-xs font-medium bg-primary bg-opacity-10 text-primary rounded-full"
-                          >
-                            {session.title}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(trainee);
-                        }}
-                        className="text-primary hover:text-primary-dark mr-3"
-                      >
-                        Modifier
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(trainee.id);
-                        }}
-                        className="text-red-600 hover:text-red-800 mr-3"
-                      >
-                        Supprimer
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-  
-        {/* Modal d'ajout */}
-        {isAddModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
-              <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-gray-900">Ajouter un stagiaire</h2>
-                <button
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              <form onSubmit={handleAddSubmit}>
-                {renderForm(addFormData, setAddFormData, false)}
-                <div className="p-6 border-t border-gray-200 flex justify-end space-x-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddModalOpen(false)}
-                    className="bg-secondary text-white px-4 py-2 rounded-md hover:bg-secondary-dark"
-                  >
-                    Annuler
-                  </button>
-                  <button type="submit" className="bg-primary text-white px-4 py-2 rounded-md flex items-center space-x-2 hover:bg-primary-dark">
-                    <CheckSquare className="h-5 w-5" />
-                    <span>Ajouter</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-  
-        {/* Modal de modification */}
-        {isEditModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
-              <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-gray-900">Modifier le stagiaire</h2>
-                <button
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              <form onSubmit={handleEditSubmit}>
-                {renderForm(editFormData, setEditFormData, true)}
-                <div className="p-6 border-t border-gray-200 flex justify-end space-x-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditModalOpen(false)}
-                    className="bg-secondary text-white px-4 py-2 rounded-md hover:bg-secondary-dark"
-                  >
-                    Annuler
-                  </button>
-                  <button type="submit" className="bg-primary text-white px-4 py-2 rounded-md flex items-center space-x-2 hover:bg-primary-dark">
-                    <CheckSquare className="h-5 w-5" />
-                    <span>Enregistrer</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-  
-        {/* Modal de détails */}
-        {isDetailsModalOpen && selectedTrainee && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
-              <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-gray-900">Détails du stagiaire</h2>
-                <button
-                  onClick={() => setIsDetailsModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              <div className="p-6">
-                <div className="flex items-center space-x-4 mb-6">
-                  <div className="p-3 bg-primary bg-opacity-10 rounded-full">
-                    <User className="h-8 w-8 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900">
-                      {selectedTrainee.first_name} {selectedTrainee.last_name}
-                    </h3>
-                    <p className="text-gray-600">{selectedTrainee.email}</p>
-                  </div>
-                </div>
-  
-                <div className="space-y-6">
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Contact</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2 text-gray-600">
-                        <Mail className="h-5 w-5" />
-                        <span>{selectedTrainee.email}</span>
-                      </div>
-                      {selectedTrainee.phone && (
-                        <div className="flex items-center space-x-2 text-gray-600">
-                          <Phone className="h-5 w-5" />
-                          <span>{selectedTrainee.phone}</span>
+                          <Phone className="h-4 w-4" />
+                          <span>{trainee.telephone_stagiaire}</span>
                         </div>
                       )}
                     </div>
-                  </div>
-  
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Entreprise</h4>
+                  </td>
+                  <td className="px-6 py-4">
                     <div className="flex items-center space-x-2">
-                      <Building className="h-5 w-4 text-gray-400" />
-                      <div className="text-sm text-gray-900">{selectedTrainee.company.name}</div>
+                      <Building className="h-4 w-4 text-gray-400" />
+                      <div className="text-sm text-gray-900">{trainee.entreprise_stagiaire}</div>
                     </div>
-                  </div>
-  
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Fonction</h4>
-                    <div className="text-sm text-gray-900">{selectedTrainee.function}</div>
-                  </div>
-  
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Sessions</h4>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{trainee.fonction_stagiaire}</div>
+                  </td>
+                  <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-2">
-                      {selectedTrainee.sessions.map((session, index) => (
+                      {(trainee.sessions || []).map((session, index) => (
                         <span
-                          key={index}
-                          className="px-3 py-1 bg-primary bg-opacity-10 text-primary rounded-full text-sm"
+                          key={`${trainee.id_stagiaire}-${session.id_session || index}`}
+                          className="px-2 py-1 text-xs font-medium bg-primary bg-opacity-10 text-primary rounded-full"
                         >
-                          {session.title}
+                          {session.titre}
                         </span>
                       ))}
                     </div>
-                  </div>
-                </div>
-              </div>
-              <div className="p-6 border-t border-gray-200 flex justify-end space-x-4">
-                <button
-                  onClick={() => setIsDetailsModalOpen(false)}
-                  className="bg-secondary text-white px-4 py-2 rounded-md hover:bg-secondary-dark"
-                >
-                  Fermer
-                </button>
-                <button
-                  onClick={() => {
-                    setIsDetailsModalOpen(false);
-                    handleEdit(selectedTrainee);
-                  }}
-                  className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-dark"
-                >
-                  Modifier
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(trainee);
+                      }}
+                      className="text-primary hover:text-primary-dark mr-3"
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(trainee.id_stagiaire);
+                      }}
+                      className="text-red-600 hover:text-red-800 mr-3"
+                    >
+                      Supprimer
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    );
-  };
-  
-  export default TraineeList;
-  
+
+      {isAddModalOpen && (
+        <AddTraineeModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          formData={addFormData}
+          setFormData={setAddFormData}
+          onSubmit={handleAddSubmit}
+          availableSessions={availableSessions}
+        />
+      )}
+
+      {isEditModalOpen && (
+        <EditTraineeModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          formData={editFormData}
+          setFormData={setEditFormData}
+          onSubmit={handleEditSubmit}
+          availableSessions={availableSessions}
+          traineeId={selectedTrainee?.id_stagiaire} // Pass traineeId to EditTraineeModal
+        />
+      )}
+
+      {isDetailsModalOpen && selectedTrainee && (
+        <TraineeDetailsModal
+          isOpen={isDetailsModalOpen}
+          onClose={() => setIsDetailsModalOpen(false)}
+          trainee={selectedTrainee}
+          onEdit={() => handleEdit(selectedTrainee)}
+        />
+      )}
+    </div>
+  );
+};
+
+export default TraineeList;
