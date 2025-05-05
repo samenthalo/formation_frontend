@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, Plus, Calendar, MapPin, Users, Building, Monitor } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 import Timeline from './modal_formationlist/Timeline';
 import ActionsPopup from './modal_formationlist/ActionsPopup';
 import SessionDetailsModal from './modal_formationlist/SessionDetailsModal';
-import EditModal from './modal_formationlist/EditModal'; // Importez le modal ici
-
-
+import EditModal from './modal_formationlist/EditModal';
+import ParticipantModal from './modal_formationlist/ParticipantModal';
 
 const FormationList = () => {
   const navigate = useNavigate();
@@ -38,10 +38,9 @@ const FormationList = () => {
   useEffect(() => {
     const fetchFormations = async () => {
       try {
-        const response = await axios.get('http://localhost:8000/sessionformation'); // Assurez-vous que l'URL est correcte
+        const response = await axios.get('http://localhost:8000/sessionformation');
         console.log('Réponse du backend :', response.data);
 
-        // Vérifiez si la réponse est un tableau
         if (Array.isArray(response.data)) {
           setFormations(response.data);
         } else {
@@ -71,12 +70,13 @@ const FormationList = () => {
       try {
         await axios.delete(`http://localhost:8000/sessionformation/delete/${id}`);
         setFormations(formations.filter(f => f.id_session !== id));
+        toast.success('Formation supprimée avec succès.');
       } catch (error) {
         console.error('Erreur lors de la suppression de la session:', error);
+        toast.error('Erreur lors de la suppression de la session.');
       }
     }
   };
-  
 
   const handleShowDetails = (formation) => {
     setSelectedFormationData(formation);
@@ -322,15 +322,27 @@ const FormationList = () => {
             ));
             setIsEditModalOpen(false);
             setSelectedFormationData(null);
+            toast.success('Formation modifiée avec succès.');
           }}
         />
       )}
 
-      {/* Participant Management Modal */}
       {isParticipantModalOpen && selectedFormationData && (
         <ParticipantModal
           formation={selectedFormationData}
           onClose={() => {
+            setIsParticipantModalOpen(false);
+            setSelectedFormationData(null);
+          }}
+          onSave={(selectedStagiaires) => {
+            // Mettre à jour les participants de la formation avec les stagiaires sélectionnés
+            const updatedFormation = {
+              ...selectedFormationData,
+              participants: selectedStagiaires.map(id => ({ id_inscription: id })),
+            };
+            setFormations(prev => prev.map(f =>
+              f.id_session === updatedFormation.id_session ? updatedFormation : f
+            ));
             setIsParticipantModalOpen(false);
             setSelectedFormationData(null);
           }}
