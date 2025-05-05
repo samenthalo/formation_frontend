@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Clock, MapPin, Users, Link as LinkIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../../services/api';
+import api from '../../services/api';
+
+interface Creneau {
+  date: string;
+  startTime: string;
+  endTime: string;
+}
 
 interface Session {
   id: string;
   title: string;
-  date: string;
-  startTime: string;
-  endTime: string;
+  description?: string;
   location: string;
   instructor: string;
   participants: number;
   maxParticipants: number;
-  description?: string;
+  creneaux: Creneau[];
+  mode: string; // Ajout du champ mode
+  lien?: string; // Ajout du champ lien
 }
 
 const Calendar = () => {
@@ -27,18 +33,23 @@ const Calendar = () => {
   useEffect(() => {
     const fetchSessions = async () => {
       try {
-        const sessionsData = await api.sessions.getAll();
+        const response = await api.get('/sessionformation'); // Assure-toi que cette URL correspond à ta route Symfony
+        const sessionsData = response.data;
         const transformedSessions = sessionsData.map(session => ({
-          id: session.id,
-          title: session.formation.title,
-          date: session.date,
-          startTime: session.start_time,
-          endTime: session.end_time,
-          location: session.location,
-          instructor: `${session.instructor.first_name} ${session.instructor.last_name}`,
-          participants: session.formation.enrolled_count,
-          maxParticipants: session.formation.max_participants,
-          description: session.formation.description || undefined
+          id: session.id_session,
+          title: session.titre,
+          description: session.description || undefined,
+          location: session.lieu,
+          instructor: session.formateur ? `${session.formateur.prenom} ${session.formateur.nom}` : 'Inconnu',
+          participants: session.nb_inscrits,
+          maxParticipants: session.nb_heures, // Assure-toi que ce champ est correct
+          creneaux: session.creneaux.map(creneau => ({
+            date: creneau.jour,
+            startTime: creneau.heure_debut,
+            endTime: creneau.heure_fin
+          })),
+          mode: session.mode, // Ajout du mode
+          lien: session.lien // Ajout du lien
         }));
         setSessions(transformedSessions);
       } catch (error) {
@@ -77,18 +88,20 @@ const Calendar = () => {
   const handleNextMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
-  // Exemple de fonction ou de composant dans la page du calendrier
-const handleCreateSession = () => {
-  navigate('/admin/formations/new', { state: { origin: 'calendar' } });
-};
 
-// Dans le JSX, par exemple un bouton
-<button onClick={handleCreateSession}>Créer une nouvelle session</button>
-
-
-  const getSessionsForDate = (date: number): Session[] => {
+  const getCreneauxForDate = (date: number): { session: Session, creneau: Creneau }[] => {
     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
-    return sessions.filter(session => session.date === dateStr);
+    const creneauxForDate: { session: Session, creneau: Creneau }[] = [];
+
+    sessions.forEach(session => {
+      session.creneaux.forEach(creneau => {
+        if (creneau.date === dateStr) {
+          creneauxForDate.push({ session, creneau });
+        }
+      });
+    });
+
+    return creneauxForDate;
   };
 
   const handleSessionClick = (session: Session) => {
@@ -158,11 +171,11 @@ const handleCreateSession = () => {
               </div>
             ))}
             {Array.from({ length: firstDayOfMonth }).map((_, index) => (
-              <div key={`empty-${index}`} className="bg-white p-2 h-32" />
+              <div key={`empty-${index}`} className="bg-white p-2 h-40" />
             ))}
             {Array.from({ length: daysInMonth }).map((_, index) => {
               const date = index + 1;
-              const daysSessions = getSessionsForDate(date);
+              const daysCreneaux = getCreneauxForDate(date);
               const isToday = new Date().getDate() === date &&
                             new Date().getMonth() === currentDate.getMonth() &&
                             new Date().getFullYear() === currentDate.getFullYear();
@@ -170,20 +183,20 @@ const handleCreateSession = () => {
               return (
                 <div
                   key={date}
-                  className={`bg-white p-2 h-32 border-t ${isToday ? 'bg-blue-50' : ''}`}
+                  className={`bg-white p-2 h-40 border-t ${isToday ? 'bg-blue-50' : ''}`}
                 >
                   <div className="font-medium text-sm mb-1">
                     {date}
                   </div>
                   <div className="space-y-1">
-                    {daysSessions.map((session) => (
+                    {daysCreneaux.map(({ session, creneau }) => (
                       <button
-                        key={session.id}
+                        key={`${session.id}-${creneau.date}`}
                         onClick={() => handleSessionClick(session)}
-                        className="w-full text-left p-2 rounded border bg-blue-100 text-blue-800 border-blue-200 hover:opacity-80 transition-opacity"
+                        className="w-full text-left p-2 rounded border bg-blue-100 text-blue-800 border-blue-200 hover:opacity-80 transition-opacity text-xs"
                       >
                         <div className="font-medium truncate">{session.title}</div>
-                        <div className="text-xs opacity-75">{session.startTime} - {session.endTime}</div>
+                        <div className="text-xs opacity-75">{creneau.startTime} - {creneau.endTime}</div>
                       </button>
                     ))}
                   </div>
@@ -207,12 +220,16 @@ const handleCreateSession = () => {
                   </span>
                 </div>
                 <p className="text-sm text-gray-600 mt-1">
-                  {new Date(selectedSession.date).toLocaleDateString('fr-FR', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  {selectedSession.creneaux.map(creneau => (
+                    <div key={creneau.date}>
+                      {new Date(creneau.date).toLocaleDateString('fr-FR', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </div>
+                  ))}
                 </p>
               </div>
               <button
@@ -226,18 +243,29 @@ const handleCreateSession = () => {
               {selectedSession.description && (
                 <p className="text-gray-600">{selectedSession.description}</p>
               )}
-              <div className="flex items-center space-x-2 text-gray-600">
-                <Clock className="h-5 w-5" />
-                <span>{selectedSession.startTime} - {selectedSession.endTime}</span>
-              </div>
-              <div className="flex items-center space-x-2 text-gray-600">
-                <MapPin className="h-5 w-5" />
-                <span>{selectedSession.location}</span>
-              </div>
+              {selectedSession.creneaux.map(creneau => (
+                <div key={creneau.date} className="flex items-center space-x-2 text-gray-600">
+                  <Clock className="h-5 w-5" />
+                  <span>{creneau.startTime} - {creneau.endTime}</span>
+                </div>
+              ))}
+              {selectedSession.lien ? (
+                <div className="flex items-center space-x-2 text-gray-600">
+                  <LinkIcon className="h-5 w-5" />
+                  <a href={selectedSession.lien} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
+                    Lien de la session
+                  </a>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2 text-gray-600">
+                  <MapPin className="h-5 w-5" />
+                  <span>{selectedSession.location}</span>
+                </div>
+              )}
               <div className="flex items-center space-x-2 text-gray-600">
                 <Users className="h-5 w-5" />
                 <span>
-                  {selectedSession.participants} / {selectedSession.maxParticipants} participants
+                  {selectedSession.participants} participants
                 </span>
               </div>
               <div className="border-t border-gray-200 pt-4">
