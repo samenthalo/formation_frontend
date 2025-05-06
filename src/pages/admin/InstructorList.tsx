@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, Filter, Plus, Mail, Phone, X, CheckSquare, BookOpen, User, Trash } from 'lucide-react';
+import { Search, Filter, Plus, Mail, Phone, X, CheckSquare, BookOpen, User, Trash, ChevronLeft, ChevronRight } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -57,6 +57,11 @@ const InstructorList = () => {
     linkedin: '',
     cv_path: null as string | null
   });
+
+  // État pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageInput, setPageInput] = useState('');
+  const instructorsPerPage = 25;
 
   useEffect(() => {
     const fetchInstructors = async () => {
@@ -181,7 +186,7 @@ const InstructorList = () => {
     if (selectedFile) {
       data.append('cv', selectedFile);
     }
-  
+
     try {
       const response = await axios.post('http://localhost:8000/formateur', data);
       const newInstructor = {
@@ -206,7 +211,6 @@ const InstructorList = () => {
       toast.error('Erreur lors de la soumission du formulaire');
     }
   };
-  
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -415,6 +419,29 @@ const InstructorList = () => {
     </form>
   );
 
+  // Logique de pagination
+  const indexOfLastInstructor = currentPage * instructorsPerPage;
+  const indexOfFirstInstructor = indexOfLastInstructor - instructorsPerPage;
+  const currentInstructors = filteredInstructors.slice(indexOfFirstInstructor, indexOfLastInstructor);
+
+  const paginate = (pageNumber: number) => {
+    if (pageNumber > 0 && pageNumber <= Math.ceil(filteredInstructors.length / instructorsPerPage)) {
+      setCurrentPage(pageNumber);
+    }
+  };
+
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPageInput(e.target.value);
+  };
+
+  const handlePageInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pageNumber = parseInt(pageInput, 10);
+    if (!isNaN(pageNumber)) {
+      paginate(pageNumber);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
@@ -485,7 +512,7 @@ const InstructorList = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredInstructors.map((instructor) => (
+              {currentInstructors.map((instructor) => (
                 <tr
                   key={instructor.id}
                   className="hover:bg-gray-50 cursor-pointer"
@@ -553,6 +580,40 @@ const InstructorList = () => {
               ))}
             </tbody>
           </table>
+          {/* Contrôles de pagination modernisés */}
+          <div className="flex justify-between items-center p-4 bg-white border-t border-gray-200">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+            >
+              <ChevronLeft className="h-5 w-5" />
+              <span className="ml-2">Précédent</span>
+            </button>
+            <form onSubmit={handlePageInputSubmit} className="flex items-center space-x-2">
+              <span>Aller à la page</span>
+              <input
+                type="number"
+                value={pageInput}
+                onChange={handlePageInputChange}
+                className="border border-gray-300 rounded-md px-3 py-2 w-16 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+              <button type="submit" className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark flex items-center">
+                <span>Aller</span>
+              </button>
+            </form>
+            <span className="text-gray-700">
+              Page {currentPage} de {Math.ceil(filteredInstructors.length / instructorsPerPage)}
+            </span>
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === Math.ceil(filteredInstructors.length / instructorsPerPage)}
+              className="flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+            >
+              <span className="mr-2">Suivant</span>
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
 

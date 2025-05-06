@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Plus, Mail, Phone, Building, X, CheckSquare, User } from 'lucide-react';
+import { Search, Filter, Plus, Mail, Phone, Building, ChevronLeft, ChevronRight } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -69,6 +69,11 @@ const TraineeList = () => {
 
   const [selectedTrainees, setSelectedTrainees] = useState<number[]>([]);
 
+  // État pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageInput, setPageInput] = useState('');
+  const traineesPerPage = 25;
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -85,10 +90,6 @@ const TraineeList = () => {
         const traineesData = await traineesResponse.json();
         const sessionsData = await sessionsResponse.json();
         const inscriptionsData = await inscriptionsResponse.json();
-
-        console.log('Fetched trainees data:', traineesData); // Log fetched trainees data
-        console.log('Fetched sessions data:', sessionsData); // Log fetched sessions data
-        console.log('Fetched inscriptions data:', inscriptionsData); // Log fetched inscriptions data
 
         setAvailableSessions(sessionsData);
         setSessions([{ id: 'all', name: 'Toutes les sessions' }, ...sessionsData.map(session => ({ id: session.id_session, name: session.titre }))]);
@@ -109,11 +110,8 @@ const TraineeList = () => {
           };
         });
 
-        console.log('Updated trainees with sessions:', updatedTrainees); // Log updated trainees with sessions
-
         setTrainees(updatedTrainees);
       } catch (error) {
-        console.error('Error fetching data:', error);
         toast.error('Erreur lors de la récupération des données');
       }
     };
@@ -122,7 +120,6 @@ const TraineeList = () => {
   }, []);
 
   const handleEdit = (trainee: Trainee) => {
-    console.log('Editing trainee:', trainee); // Log trainee being edited
     setSelectedTrainee(trainee);
     setEditFormData({
       id_stagiaire: trainee.id_stagiaire, // Ajouter l'ID ici
@@ -134,8 +131,6 @@ const TraineeList = () => {
       fonction_stagiaire: trainee.fonction_stagiaire || '',
       sessions: trainee.sessions || [],
     });
-
-    console.log('Edit form data set:', editFormData); // Log edit form data
 
     setIsEditModalOpen(true);
   };
@@ -155,8 +150,6 @@ const TraineeList = () => {
       sessions: editFormData.sessions
     };
 
-    console.log('Updated trainee data:', updatedTrainee); // Log updated trainee data
-
     try {
       await fetch(`http://localhost:8000/stagiaires/updates/${selectedTrainee.id_stagiaire}`, {
         method: 'POST', // Utiliser POST au lieu de PUT
@@ -169,7 +162,6 @@ const TraineeList = () => {
       setIsEditModalOpen(false);
       toast.success('Stagiaire mis à jour avec succès');
     } catch (error) {
-      console.error('Error updating trainee:', error);
       toast.error('Erreur lors de la mise à jour du stagiaire');
     }
   };
@@ -186,8 +178,6 @@ const TraineeList = () => {
     formDataToSend.append('fonction_stagiaire', addFormData.fonction_stagiaire);
     formDataToSend.append('id_session', JSON.stringify(addFormData.sessions)); // Assuming sessions are passed here
 
-    console.log('Add form data to send:', Object.fromEntries(formDataToSend.entries())); // Log add form data to send
-
     try {
       const response = await fetch('http://localhost:8000/stagiaires', {
         method: 'POST',
@@ -196,7 +186,6 @@ const TraineeList = () => {
 
       if (response.ok) {
         const newTrainee = await response.json();
-        console.log('New trainee added:', newTrainee); // Log the new trainee data
 
         // Update the state with the new trainee
         setTrainees(prevTrainees => [...prevTrainees, newTrainee]);
@@ -215,7 +204,6 @@ const TraineeList = () => {
         throw new Error('Failed to add trainee');
       }
     } catch (error) {
-      console.error('Error adding trainee:', error);
       toast.error('Erreur lors de l\'ajout du stagiaire');
     }
   };
@@ -229,7 +217,6 @@ const TraineeList = () => {
         setTrainees(trainees.filter(t => t.id_stagiaire !== id));
         toast.success('Stagiaire supprimé avec succès');
       } catch (error) {
-        console.error('Error deleting trainee:', error);
         toast.error('Erreur lors de la suppression du stagiaire');
       }
     }
@@ -349,14 +336,39 @@ const TraineeList = () => {
     toast.success('Stagiaires ajoutés à la session avec succès');
   };
 
-  const filteredTrainees = trainees.filter(trainee => {
-    const matchesSearch = trainee.prenom_stagiaire.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         trainee.nom_stagiaire.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         trainee.email_stagiaire.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesSession = selectedSession === 'all' ||
-                          (trainee.sessions || []).some(s => s.titre.toLowerCase().includes(selectedSession.toLowerCase()));
-    return matchesSearch && matchesSession;
-  });
+  const filteredTrainees = trainees
+    .filter(trainee => {
+      const matchesSearch = trainee.prenom_stagiaire.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           trainee.nom_stagiaire.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           trainee.email_stagiaire.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesSession = selectedSession === 'all' ||
+                            (trainee.sessions || []).some(s => s.titre.toLowerCase().includes(selectedSession.toLowerCase()));
+      return matchesSearch && matchesSession;
+    })
+    .sort((a, b) => a.nom_stagiaire.localeCompare(b.nom_stagiaire)); // Tri alphabétique par nom
+
+  // Logique de pagination
+  const indexOfLastTrainee = currentPage * traineesPerPage;
+  const indexOfFirstTrainee = indexOfLastTrainee - traineesPerPage;
+  const currentTrainees = filteredTrainees.slice(indexOfFirstTrainee, indexOfLastTrainee);
+
+  const paginate = (pageNumber: number) => {
+    if (pageNumber > 0 && pageNumber <= Math.ceil(filteredTrainees.length / traineesPerPage)) {
+      setCurrentPage(pageNumber);
+    }
+  };
+
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPageInput(e.target.value);
+  };
+
+  const handlePageInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pageNumber = parseInt(pageInput, 10);
+    if (!isNaN(pageNumber)) {
+      paginate(pageNumber);
+    }
+  };
 
   return (
     <div className="space-y-8 p-6">
@@ -438,9 +450,9 @@ const TraineeList = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <input
                     type="checkbox"
-                    checked={selectedTrainees.length === filteredTrainees.length}
+                    checked={selectedTrainees.length === currentTrainees.length}
                     onChange={(e) =>
-                      setSelectedTrainees(e.target.checked ? filteredTrainees.map(t => t.id_stagiaire) : [])
+                      setSelectedTrainees(e.target.checked ? currentTrainees.map(t => t.id_stagiaire) : [])
                     }
                     className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
                   />
@@ -466,7 +478,7 @@ const TraineeList = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredTrainees.map((trainee) => (
+              {currentTrainees.map((trainee) => (
                 <tr
                   key={trainee.id_stagiaire} // Utilisez une clé unique ici
                   className="hover:bg-gray-50 cursor-pointer"
@@ -548,6 +560,40 @@ const TraineeList = () => {
               ))}
             </tbody>
           </table>
+          {/* Contrôles de pagination modernisés */}
+          <div className="flex justify-between items-center p-4 bg-white border-t border-gray-200">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+            >
+              <ChevronLeft className="h-5 w-5" />
+              <span className="ml-2">Précédent</span>
+            </button>
+            <form onSubmit={handlePageInputSubmit} className="flex items-center space-x-2">
+              <span>Aller à la page</span>
+              <input
+                type="number"
+                value={pageInput}
+                onChange={handlePageInputChange}
+                className="border border-gray-300 rounded-md px-3 py-2 w-16 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+              <button type="submit" className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark flex items-center">
+                <span>Aller</span>
+              </button>
+            </form>
+            <span className="text-gray-700">
+              Page {currentPage} de {Math.ceil(filteredTrainees.length / traineesPerPage)}
+            </span>
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === Math.ceil(filteredTrainees.length / traineesPerPage)}
+              className="flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+            >
+              <span className="mr-2">Suivant</span>
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
 

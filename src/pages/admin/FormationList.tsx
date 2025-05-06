@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Plus, Calendar, MapPin, Users, Building, Monitor } from 'lucide-react';
+import { Search, Filter, Plus, Calendar, MapPin, Users, Building, Monitor, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -33,27 +33,41 @@ const FormationList = () => {
   const [opcoQuestionnaireResponses, setOpcoQuestionnaireResponses] = useState(0);
   const [emailsSent, setEmailsSent] = useState(0);
   const [formations, setFormations] = useState([]);
+  const [filteredFormations, setFilteredFormations] = useState([]);
   const [error, setError] = useState(null);
+
+  // État pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageInput, setPageInput] = useState('');
+  const formationsPerPage = 25;
 
   useEffect(() => {
     const fetchFormations = async () => {
       try {
         const response = await axios.get('http://localhost:8000/sessionformation');
-        console.log('Réponse du backend :', response.data);
 
         if (Array.isArray(response.data)) {
           setFormations(response.data);
+          setFilteredFormations(response.data); // Initialisez également les formations filtrées
         } else {
           setError('Les données récupérées ne sont pas au format attendu.');
         }
       } catch (error) {
-        console.error('Erreur lors de la récupération des sessions:', error);
         setError('Erreur lors de la récupération des sessions.');
       }
     };
 
     fetchFormations();
   }, []);
+
+  useEffect(() => {
+    // Filtrer les formations en fonction du terme de recherche
+    const filtered = formations.filter(formation => {
+      const matchesSearch = formation.titre.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesSearch;
+    });
+    setFilteredFormations(filtered);
+  }, [searchTerm, formations]);
 
   const handleEdit = (formation) => {
     setSelectedFormationData(formation);
@@ -70,9 +84,9 @@ const FormationList = () => {
       try {
         await axios.delete(`http://localhost:8000/sessionformation/delete/${id}`);
         setFormations(formations.filter(f => f.id_session !== id));
+        setFilteredFormations(formations.filter(f => f.id_session !== id)); // Mettre à jour filteredFormations
         toast.success('Formation supprimée avec succès.');
       } catch (error) {
-        console.error('Erreur lors de la suppression de la session:', error);
         toast.error('Erreur lors de la suppression de la session.');
       }
     }
@@ -99,12 +113,34 @@ const FormationList = () => {
 
   const handleSendEmails = (formation) => {
     if (formation.responsable && formation.responsable.email) {
-      console.log(`Envoi d'un email au responsable ${formation.responsable.email} pour la formation "${formation.titre}".`);
       alert(`Email envoyé au responsable : ${formation.responsable.email}`);
     } else {
       alert(`Aucun responsable défini pour la formation "${formation.titre}".`);
     }
   };
+
+  const paginate = (pageNumber) => {
+    if (pageNumber > 0 && pageNumber <= Math.ceil(filteredFormations.length / formationsPerPage)) {
+      setCurrentPage(pageNumber);
+    }
+  };
+
+  const handlePageInputChange = (e) => {
+    setPageInput(e.target.value);
+  };
+
+  const handlePageInputSubmit = (e) => {
+    e.preventDefault();
+    const pageNumber = parseInt(pageInput, 10);
+    if (!isNaN(pageNumber)) {
+      paginate(pageNumber);
+    }
+  };
+
+  // Logique de pagination
+  const indexOfLastFormation = currentPage * formationsPerPage;
+  const indexOfFirstFormation = indexOfLastFormation - formationsPerPage;
+  const currentFormations = filteredFormations.slice(indexOfFirstFormation, indexOfLastFormation);
 
   if (error) {
     return <div className="error-message">{error}</div>;
@@ -184,7 +220,7 @@ const FormationList = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {Array.isArray(formations) && formations.map((formation) => (
+                {currentFormations.map((formation) => (
                   <tr
                     key={formation.id_session}
                     className="cursor-pointer hover:bg-gray-100"
@@ -302,6 +338,40 @@ const FormationList = () => {
                 ))}
               </tbody>
             </table>
+            {/* Contrôles de pagination modernisés */}
+            <div className="flex justify-between items-center p-4 bg-white border-t border-gray-200">
+              <button
+                onClick={() => paginate(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+              >
+                <ChevronLeft className="h-5 w-5" />
+                <span className="ml-2">Précédent</span>
+              </button>
+              <form onSubmit={handlePageInputSubmit} className="flex items-center space-x-2">
+                <span>Aller à la page</span>
+                <input
+                  type="number"
+                  value={pageInput}
+                  onChange={handlePageInputChange}
+                  className="border border-gray-300 rounded-md px-3 py-2 w-16 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+                <button type="submit" className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark flex items-center">
+                  <span>Aller</span>
+                </button>
+              </form>
+              <span className="text-gray-700">
+                Page {currentPage} de {Math.ceil(filteredFormations.length / formationsPerPage)}
+              </span>
+              <button
+                onClick={() => paginate(currentPage + 1)}
+                disabled={currentPage === Math.ceil(filteredFormations.length / formationsPerPage)}
+                className="flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+              >
+                <span className="mr-2">Suivant</span>
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </div>
       ) : (
@@ -318,6 +388,9 @@ const FormationList = () => {
           }}
           onSave={(updatedFormation) => {
             setFormations(prev => prev.map(f =>
+              f.id_session === updatedFormation.id_session ? updatedFormation : f
+            ));
+            setFilteredFormations(prev => prev.map(f =>
               f.id_session === updatedFormation.id_session ? updatedFormation : f
             ));
             setIsEditModalOpen(false);
@@ -341,6 +414,9 @@ const FormationList = () => {
               participants: selectedStagiaires.map(id => ({ id_inscription: id })),
             };
             setFormations(prev => prev.map(f =>
+              f.id_session === updatedFormation.id_session ? updatedFormation : f
+            ));
+            setFilteredFormations(prev => prev.map(f =>
               f.id_session === updatedFormation.id_session ? updatedFormation : f
             ));
             setIsParticipantModalOpen(false);

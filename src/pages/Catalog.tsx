@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Clock, BookOpen, Users, Monitor, Home, X, Accessibility, Edit, Calendar, Target, Globe, Book, CheckCircle, FileText, List, Plus, Trash } from 'lucide-react';
+import { Search, Filter, Clock, BookOpen, Users, Monitor, Home, X, Accessibility, Edit, Calendar, Target, Globe, Book, CheckCircle, FileText, List, Plus, Trash, ChevronLeft, ChevronRight } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import api from '../services/api';
 import type { Formation } from '../types/database';
@@ -26,12 +26,16 @@ const Catalog = () => {
   const modalRef = useRef(null);
   const contentToExportRef = useRef(null);
 
+  // État pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageInput, setPageInput] = useState('');
+  const formationsPerPage = 27;
+
   useEffect(() => {
     const fetchFormationsAndSessions = async () => {
       try {
         const formationsResponse = await api.get('/formations');
         if (!Array.isArray(formationsResponse.data)) {
-          console.error('La réponse de l\'API des formations n\'est pas un tableau:', formationsResponse.data);
           setFormations([]);
           return;
         }
@@ -53,7 +57,6 @@ const Catalog = () => {
         setFormations(updatedFormations);
 
       } catch (error) {
-        console.error('Erreur lors du chargement des formations et sessions:', error);
         toast.error('Erreur lors du chargement des formations.');
       } finally {
         setIsLoading(false);
@@ -74,9 +77,7 @@ const Catalog = () => {
       const response = await api.post('/formations/', newFormation);
       setFormations((prevFormations) => [...prevFormations, response.data]);
       toast.success('Formation créée avec succès!');
-      console.log('Formation créée avec succès:', response.data);
     } catch (error) {
-      console.error('Erreur lors de la création de la formation:', error);
       toast.error('Erreur lors de la création de la formation.');
     }
   };
@@ -123,6 +124,29 @@ const Catalog = () => {
 
     return matchesSearch && matchesDuration && matchesCategory;
   }) : [];
+
+  // Logique de pagination
+  const indexOfLastFormation = currentPage * formationsPerPage;
+  const indexOfFirstFormation = indexOfLastFormation - formationsPerPage;
+  const currentFormations = filteredFormations.slice(indexOfFirstFormation, indexOfLastFormation);
+
+  const paginate = (pageNumber: number) => {
+    if (pageNumber > 0 && pageNumber <= Math.ceil(filteredFormations.length / formationsPerPage)) {
+      setCurrentPage(pageNumber);
+    }
+  };
+
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPageInput(e.target.value);
+  };
+
+  const handlePageInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pageNumber = parseInt(pageInput, 10);
+    if (!isNaN(pageNumber)) {
+      paginate(pageNumber);
+    }
+  };
 
   const handleOpenDetails = (formation: Formation) => {
     setSelectedFormation(formation);
@@ -192,8 +216,6 @@ const Catalog = () => {
         },
       });
 
-      console.log('Réponse de l\'API:', response.data);
-
       setFormations(formations.map(f =>
         f.id_formation === updatedFormation.id_formation
           ? { ...f, programme: programme }
@@ -202,7 +224,6 @@ const Catalog = () => {
       setIsEditModalOpen(false);
       toast.success('Formation mise à jour avec succès!');
     } catch (error) {
-      console.error('Erreur lors de la mise à jour de la formation:', error);
       toast.error('Erreur lors de la mise à jour de la formation.');
     }
   };
@@ -256,7 +277,6 @@ const Catalog = () => {
       setDetailsKey(prevKey => prevKey + 1); // Forcer la mise à jour de l'interface utilisateur
       toast.success('Formation ajoutée avec succès!');
     } catch (error) {
-      console.error('Erreur lors de l\'ajout de la formation:', error);
       toast.error('Erreur lors de l\'ajout de la formation.');
     }
   };
@@ -271,7 +291,6 @@ const Catalog = () => {
       setIsDetailsModalOpen(false);
       toast.success('Formation supprimée avec succès !');
     } catch (error) {
-      console.error('Erreur lors de la suppression de la formation:', error);
       toast.error('Erreur lors de la suppression de la formation.');
     }
   };
@@ -453,10 +472,8 @@ const Catalog = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredFormations.map((formation, index) => {
+        {currentFormations.map((formation, index) => {
           if (!formation) return null;
-
-          console.log("📦 Formation ID:", formation.id_formation ?? `formation-${index}`, "Titre:", formation.titre);
 
           const { priceHT, priceTTC } = calculatePrices(formation.prix_unitaire_ht, formation.taux_tva);
 
@@ -545,7 +562,7 @@ const Catalog = () => {
                 <div className="flex items-center text-gray-600 mb-1 tooltip">
                   <CheckCircle className="h-4 w-4 mr-2" />
                   <span>{formation.delai_acces}</span>
-                  <span className="tooltiptext">Délais d'accès</span>
+                  <span className="tooltiptext">Délai d'accès</span>
                 </div>
 
                 <div className="flex items-center text-gray-600 mb-1 tooltip">
@@ -618,7 +635,7 @@ const Catalog = () => {
         })}
       </div>
 
-      {filteredFormations.length === 0 && (
+      {currentFormations.length === 0 && (
         <div className="text-center py-8">
           <BookOpen className="h-10 w-10 text-gray-400 mx-auto mb-2" />
           <h3 className="text-lg font-medium text-gray-900 mb-1">
@@ -629,6 +646,41 @@ const Catalog = () => {
           </p>
         </div>
       )}
+
+      {/* Contrôles de pagination modernisés */}
+      <div className="flex justify-between items-center p-4 bg-white border-t border-gray-200">
+        <button
+          onClick={() => paginate(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+        >
+          <ChevronLeft className="h-5 w-5" />
+          <span className="ml-2">Précédent</span>
+        </button>
+        <form onSubmit={handlePageInputSubmit} className="flex items-center space-x-2">
+          <span>Aller à la page</span>
+          <input
+            type="number"
+            value={pageInput}
+            onChange={handlePageInputChange}
+            className="border border-gray-300 rounded-md px-3 py-2 w-16 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+          />
+          <button type="submit" className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark flex items-center">
+            <span>Aller</span>
+          </button>
+        </form>
+        <span className="text-gray-700">
+          Page {currentPage} de {Math.ceil(filteredFormations.length / formationsPerPage)}
+        </span>
+        <button
+          onClick={() => paginate(currentPage + 1)}
+          disabled={currentPage === Math.ceil(filteredFormations.length / formationsPerPage)}
+          className="flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+        >
+          <span className="mr-2">Suivant</span>
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </div>
 
       <DetailsModal
         selectedFormation={selectedFormation}
@@ -661,6 +713,6 @@ const Catalog = () => {
       />
     </div>
   );
-}
+};
 
 export default Catalog;
