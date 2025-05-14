@@ -585,6 +585,9 @@ const TraineeList = () => {
             <span className="text-gray-700">
               Page {currentPage} de {Math.ceil(filteredTrainees.length / traineesPerPage)}
             </span>
+            <span className="text-gray-700">
+              {indexOfFirstTrainee + 1} - {Math.min(indexOfLastTrainee, filteredTrainees.length)} sur {filteredTrainees.length} lignes
+            </span>
             <button
               onClick={() => paginate(currentPage + 1)}
               disabled={currentPage === Math.ceil(filteredTrainees.length / traineesPerPage)}

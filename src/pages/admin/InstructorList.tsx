@@ -58,10 +58,14 @@ const InstructorList = () => {
     cv_path: null as string | null
   });
 
-  // État pour la pagination
+  // État pour la pagination des instructeurs
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState('');
   const instructorsPerPage = 25;
+
+  // État pour la pagination des sessions
+  const [currentSessionPage, setCurrentSessionPage] = useState(1);
+  const sessionsPerPage = 10;
 
   useEffect(() => {
     const fetchInstructors = async () => {
@@ -170,6 +174,7 @@ const InstructorList = () => {
 
   const handleViewDetails = (instructor: Instructor) => {
     setSelectedInstructor(instructor);
+    setCurrentSessionPage(1); // Réinitialiser la page des sessions lors de l'ouverture des détails
     setIsDetailsModalOpen(true);
   };
 
@@ -419,7 +424,7 @@ const InstructorList = () => {
     </form>
   );
 
-  // Logique de pagination
+  // Logique de pagination des instructeurs
   const indexOfLastInstructor = currentPage * instructorsPerPage;
   const indexOfFirstInstructor = indexOfLastInstructor - instructorsPerPage;
   const currentInstructors = filteredInstructors.slice(indexOfFirstInstructor, indexOfLastInstructor);
@@ -439,6 +444,17 @@ const InstructorList = () => {
     const pageNumber = parseInt(pageInput, 10);
     if (!isNaN(pageNumber)) {
       paginate(pageNumber);
+    }
+  };
+
+  // Logique de pagination des sessions
+  const indexOfLastSession = currentSessionPage * sessionsPerPage;
+  const indexOfFirstSession = indexOfLastSession - sessionsPerPage;
+  const currentSessions = selectedInstructor?.sessions.slice(indexOfFirstSession, indexOfLastSession) || [];
+
+  const paginateSessions = (pageNumber: number) => {
+    if (pageNumber > 0 && pageNumber <= Math.ceil((selectedInstructor?.sessions.length || 0) / sessionsPerPage)) {
+      setCurrentSessionPage(pageNumber);
     }
   };
 
@@ -605,6 +621,9 @@ const InstructorList = () => {
             <span className="text-gray-700">
               Page {currentPage} de {Math.ceil(filteredInstructors.length / instructorsPerPage)}
             </span>
+            <span className="text-gray-700">
+              {indexOfFirstInstructor + 1} - {Math.min(indexOfLastInstructor, filteredInstructors.length)} sur {filteredInstructors.length} lignes
+            </span>
             <button
               onClick={() => paginate(currentPage + 1)}
               disabled={currentPage === Math.ceil(filteredInstructors.length / instructorsPerPage)}
@@ -750,9 +769,9 @@ const InstructorList = () => {
 
                 <div className="md:col-span-2">
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Historique des sessions</h4>
-                  {selectedInstructor.sessions.length > 0 ? (
+                  {currentSessions.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {selectedInstructor.sessions.map((session) => (
+                      {currentSessions.map((session) => (
                         <div key={session.id_session} className="border border-gray-200 p-3 rounded-lg shadow-sm bg-white">
                           <h5 className="text-base font-semibold text-gray-900">{session.titre}</h5>
                           {session.description && <p className="text-gray-600 mt-1 text-sm">{session.description}</p>}
@@ -774,6 +793,31 @@ const InstructorList = () => {
                   ) : (
                     <p className="text-gray-600">Aucune session disponible.</p>
                   )}
+                  {/* Contrôles de pagination pour les sessions */}
+                  <div className="flex justify-between items-center p-4 bg-white border-t border-gray-200">
+                    <button
+                      onClick={() => paginateSessions(currentSessionPage - 1)}
+                      disabled={currentSessionPage === 1}
+                      className="flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                      <span className="ml-2">Précédent</span>
+                    </button>
+                    <span className="text-gray-700">
+                      Page {currentSessionPage} de {Math.ceil((selectedInstructor?.sessions.length || 0) / sessionsPerPage)}
+                    </span>
+                    <span className="text-gray-700">
+                      {indexOfFirstSession + 1} - {Math.min(indexOfLastSession, selectedInstructor?.sessions.length || 0)} sur {selectedInstructor?.sessions.length || 0} lignes
+                    </span>
+                    <button
+                      onClick={() => paginateSessions(currentSessionPage + 1)}
+                      disabled={currentSessionPage === Math.ceil((selectedInstructor?.sessions.length || 0) / sessionsPerPage)}
+                      className="flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+                    >
+                      <span className="mr-2">Suivant</span>
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

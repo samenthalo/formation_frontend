@@ -98,8 +98,13 @@ const FormationList = () => {
   };
 
   const handleShowTimelineFromSession = (formation) => {
-    setSelectedSession(formation);
-    setViewMode('timeline');
+    console.log('Selected Session Data:', formation); // Log the selected session data
+    if (formation && formation.id_session) {
+      setSelectedSession(formation);
+      setViewMode('timeline');
+    } else {
+      console.error('Invalid session data:', formation);
+    }
   };
 
   const handleCreateSession = () => {
@@ -301,7 +306,8 @@ const FormationList = () => {
                           e.stopPropagation();
                           handleEdit(formation);
                         }}
-                        className="text-primary hover:text-primary-dark mr-3"
+                        className={`text-primary hover:text-primary-dark mr-3 ${formation.statut === 'validé OPCO' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={formation.statut === 'validé OPCO'}
                       >
                         Modifier
                       </button>
@@ -363,6 +369,9 @@ const FormationList = () => {
               <span className="text-gray-700">
                 Page {currentPage} de {Math.ceil(filteredFormations.length / formationsPerPage)}
               </span>
+              <span className="text-gray-700">
+                {indexOfFirstFormation + 1} - {Math.min(indexOfLastFormation, filteredFormations.length)} sur {filteredFormations.length} lignes
+              </span>
               <button
                 onClick={() => paginate(currentPage + 1)}
                 disabled={currentPage === Math.ceil(filteredFormations.length / formationsPerPage)}
@@ -403,6 +412,7 @@ const FormationList = () => {
       {isParticipantModalOpen && selectedFormationData && (
         <ParticipantModal
           formation={selectedFormationData}
+          statut={selectedFormationData.statut}
           onClose={() => {
             setIsParticipantModalOpen(false);
             setSelectedFormationData(null);
