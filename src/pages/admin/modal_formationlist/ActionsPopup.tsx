@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Trash, Pencil, Mail, Tag, FileText } from 'lucide-react';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 interface Formation {
+  id_session: string;
   enrolledCount: number;
   title: string;
   description: string;
@@ -19,56 +22,20 @@ interface Formation {
 const ActionsPopup: React.FC<{
   onClose: () => void;
   formation: Formation;
-  presenceSheetsSent: number;
-  setPresenceSheetsSent: React.Dispatch<React.SetStateAction<number>>;
-  signaturesCount: number;
-  setSignaturesCount: React.Dispatch<React.SetStateAction<number>>;
-  quizzSent: number;
-  setQuizzSent: React.Dispatch<React.SetStateAction<number>>;
-  quizzResponses: number;
-  setQuizzResponses: React.Dispatch<React.SetStateAction<number>>;
-  satisfactionSent: number;
-  setSatisfactionSent: React.Dispatch<React.SetStateAction<number>>;
-  satisfactionResponses: number;
-  setSatisfactionResponses: React.Dispatch<React.SetStateAction<number>>;
-  coldQuestionnaireSent: number;
-  setColdQuestionnaireSent: React.Dispatch<React.SetStateAction<number>>;
-  coldQuestionnaireResponses: number;
-  setColdQuestionnaireResponses: React.Dispatch<React.SetStateAction<number>>;
-  opcoQuestionnaireSent: number;
-  setOpcoQuestionnaireSent: React.Dispatch<React.SetStateAction<number>>;
-  opcoQuestionnaireResponses: number;
-  setOpcoQuestionnaireResponses: React.Dispatch<React.SetStateAction<number>>;
-  emailsSent: number;
-  setEmailsSent: React.Dispatch<React.SetStateAction<number>>;
-}> = ({
-  onClose,
-  formation,
-  presenceSheetsSent,
-  setPresenceSheetsSent,
-  signaturesCount,
-  setSignaturesCount,
-  quizzSent,
-  setQuizzSent,
-  quizzResponses,
-  setQuizzResponses,
-  satisfactionSent,
-  setSatisfactionSent,
-  satisfactionResponses,
-  setSatisfactionResponses,
-  coldQuestionnaireSent,
-  setColdQuestionnaireSent,
-  coldQuestionnaireResponses,
-  setColdQuestionnaireResponses,
-  opcoQuestionnaireSent,
-  setOpcoQuestionnaireSent,
-  opcoQuestionnaireResponses,
-  setOpcoQuestionnaireResponses,
-  emailsSent,
-  setEmailsSent
-}) => {
-
+}> = ({ onClose, formation }) => {
   const [isEmailPreviewOpen, setIsEmailPreviewOpen] = useState(false);
+  const [presenceSheetsSent, setPresenceSheetsSent] = useState(0);
+  const [signaturesCount, setSignaturesCount] = useState(0);
+  const [quizzSent, setQuizzSent] = useState(0);
+  const [quizzResponses, setQuizzResponses] = useState(0);
+  const [satisfactionSent, setSatisfactionSent] = useState(0);
+  const [satisfactionResponses, setSatisfactionResponses] = useState(0);
+  const [coldQuestionnaireSent, setColdQuestionnaireSent] = useState(0);
+  const [coldQuestionnaireResponses, setColdQuestionnaireResponses] = useState(0);
+  const [opcoQuestionnaireSent, setOpcoQuestionnaireSent] = useState(0);
+  const [opcoQuestionnaireResponses, setOpcoQuestionnaireResponses] = useState(0);
+  const [emailsSent, setEmailsSent] = useState(0);
+  const [eventDates, setEventDates] = useState<{ [key: string]: string }>({});
   const [emailDetails, setEmailDetails] = useState({
     to: 'destinataire@example.com',
     subject: `Invitation à la Formation: ${formation.title}`,
@@ -88,38 +55,174 @@ const ActionsPopup: React.FC<{
       Cordialement,
       L'équipe de formation
     `,
-    attachments: ['Programme de la formation.pdf', 'Livret d\'accueil.pdf'] // Pièces jointes préremplies
+    attachments: ['Programme de la formation.pdf', 'Livret d\'accueil.pdf']
   });
 
+  useEffect(() => {
+    const fetchData = async () => {
+      const data = await fetchChronologieData();
+      setPresenceSheetsSent(data.filter(item => item.typeEvenement === 'Feuille de présence envoyée').length);
+      setQuizzSent(data.filter(item => item.typeEvenement === 'Quiz envoyé').length);
+      setSatisfactionSent(data.filter(item => item.typeEvenement === 'Enquête de satisfaction envoyée').length);
+      setColdQuestionnaireSent(data.filter(item => item.typeEvenement === 'Questionnaire à froid envoyé').length);
+      setOpcoQuestionnaireSent(data.filter(item => item.typeEvenement === 'Questionnaire OPCO envoyé').length);
+      setEmailsSent(data.filter(item => item.typeEvenement === 'Email envoyé').length);
+
+      // Extract the latest dates for each event type
+      const dates: { [key: string]: string } = {};
+      data.forEach(item => {
+        if (!dates[item.typeEvenement] || new Date(item.dateEvenement) > new Date(dates[item.typeEvenement])) {
+          dates[item.typeEvenement] = item.dateEvenement;
+        }
+      });
+      setEventDates(dates);
+    };
+    fetchData();
+  }, []);
+
+  const fetchChronologieData = async () => {
+    try {
+      const response = await fetch(`http://localhost:8000/chronologie/?id_session=${formation.id_session}`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.map(item => {
+          const date = new Date(item.dateEvenement);
+          const day = date.getDate().toString().padStart(2, '0');
+          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+          const year = date.getFullYear();
+          return {
+            ...item,
+            dateEvenement: `${month}/${day}/${year}`
+          };
+        });
+      } else {
+        console.error('Error fetching chronologie data:', response.statusText);
+        return [];
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      return [];
+    }
+  };
+
+  const sendEventToBackend = async (typeEvenement: string) => {
+    if (!formation.id_session) {
+      toast.error('ID de la session manquant');
+      return;
+    }
+
+    const date = new Date();
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    const dateEvenement = `${day}/${month}/${year}`;
+
+    let description;
+    switch (typeEvenement) {
+      case 'Feuille de présence envoyée':
+        description = `Feuille de présence envoyée pour la session`;
+        break;
+      case 'Quiz envoyé':
+        description = `Quiz envoyé pour la session`;
+        break;
+      case 'Enquête de satisfaction envoyée':
+        description = `Enquête de satisfaction envoyée pour la session`;
+        break;
+      case 'Questionnaire à froid envoyé':
+        description = `Questionnaire à froid envoyé pour la session`;
+        break;
+      case 'Questionnaire OPCO envoyé':
+        description = `Questionnaire OPCO envoyé pour la session`;
+        break;
+      case 'Email envoyé':
+        description = `Email envoyé pour la session`;
+        break;
+      default:
+        description = `Événement inconnu pour la session`;
+    }
+
+    const chronologieData = {
+      idSession: formation.id_session,
+      dateEvenement: dateEvenement,
+      typeEvenement: typeEvenement,
+      description: description
+    };
+
+    console.log('Données envoyées à l\'API:', chronologieData);
+
+    try {
+      const response = await fetch('http://localhost:8000/chronologie/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(chronologieData)
+      });
+
+      console.log('Réponse brute de l\'API:', response);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Réponse JSON de l\'API:', data);
+        toast.success(getSuccessMessage(typeEvenement));
+      } else {
+        const errorData = await response.json();
+        console.error('Erreur de l\'API:', errorData);
+        toast.error('Erreur lors de l\'enregistrement de l\'événement');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la requête:', error);
+      toast.error('Erreur lors de l\'enregistrement de l\'événement');
+    }
+  };
+
+  const getSuccessMessage = (typeEvenement: string) => {
+    switch (typeEvenement) {
+      case 'Feuille de présence envoyée':
+        return 'La feuille de présence a bien été envoyée.';
+      case 'Quiz envoyé':
+        return 'Le quiz a bien été envoyé.';
+      case 'Enquête de satisfaction envoyée':
+        return 'L\'enquête de satisfaction a bien été envoyée.';
+      case 'Questionnaire à froid envoyé':
+        return 'Le questionnaire à froid a bien été envoyé.';
+      case 'Questionnaire OPCO envoyé':
+        return 'Le questionnaire OPCO a bien été envoyé.';
+      case 'Email envoyé':
+        return 'L\'email a bien été envoyé.';
+      default:
+        return 'L\'événement a bien été enregistré.';
+    }
+  };
+
   const handleSendPresenceSheet = () => {
+    sendEventToBackend('Feuille de présence envoyée');
     setPresenceSheetsSent(prev => prev + 1);
-    setSignaturesCount(prev => prev + 1); // Assuming one signature per sheet
-    alert('Feuille de présence envoyée');
+    setSignaturesCount(prev => prev + 1);
   };
 
   const handleSendQuizz = () => {
+    sendEventToBackend('Quiz envoyé');
     setQuizzSent(prev => prev + 1);
-    alert('Quizz envoyé');
   };
 
   const handleSendSatisfaction = () => {
+    sendEventToBackend('Enquête de satisfaction envoyée');
     setSatisfactionSent(prev => prev + 1);
-    alert('Enquête de satisfaction envoyée');
   };
 
   const handleSendColdQuestionnaire = () => {
+    sendEventToBackend('Questionnaire à froid envoyé');
     setColdQuestionnaireSent(prev => prev + 1);
-    alert('Questionnaire à froid envoyé');
   };
 
   const handleSendOpcoQuestionnaire = () => {
+    sendEventToBackend('Questionnaire OPCO envoyé');
     setOpcoQuestionnaireSent(prev => prev + 1);
-    alert('Questionnaire OPCO envoyé');
   };
 
   const handleSendEmail = () => {
     setIsEmailPreviewOpen(true);
-    // Ne pas incrémenter emailsSent ici si vous n'avez pas de backend
   };
 
   const closeEmailPreview = () => {
@@ -127,7 +230,7 @@ const ActionsPopup: React.FC<{
   };
 
   const handleEmailSendConfirmation = () => {
-    alert('Email envoyé avec succès !');
+    sendEventToBackend('Email envoyé');
     closeEmailPreview();
   };
 
@@ -167,6 +270,7 @@ const ActionsPopup: React.FC<{
             <div className="text-sm text-gray-500 mt-2">
               <p>Feuilles de présence envoyées : {presenceSheetsSent}</p>
               <p>Signatures effectuées : {signaturesCount}</p>
+              {eventDates['Feuille de présence envoyée'] && <p>Dernière date : {eventDates['Feuille de présence envoyée']}</p>}
             </div>
           </div>
           <div>
@@ -177,6 +281,7 @@ const ActionsPopup: React.FC<{
               <p>Quiz envoyés : {quizzSent}</p>
               <p>Réponses au quiz : {quizzResponses}</p>
               <p>Taux de réponse : {calculateResponseRate(quizzResponses, formation.enrolledCount)}</p>
+              {eventDates['Quiz envoyé'] && <p>Dernière date : {eventDates['Quiz envoyé']}</p>}
             </div>
           </div>
           <div>
@@ -187,6 +292,7 @@ const ActionsPopup: React.FC<{
               <p>Enquêtes de satisfaction envoyées : {satisfactionSent}</p>
               <p>Réponses à l'enquête de satisfaction : {satisfactionResponses}</p>
               <p>Taux de réponse : {calculateResponseRate(satisfactionResponses, formation.enrolledCount)}</p>
+              {eventDates['Enquête de satisfaction envoyée'] && <p>Dernière date : {eventDates['Enquête de satisfaction envoyée']}</p>}
             </div>
           </div>
           <div>
@@ -197,6 +303,7 @@ const ActionsPopup: React.FC<{
               <p>Questionnaires à froid envoyés : {coldQuestionnaireSent}</p>
               <p>Réponses au questionnaire à froid : {coldQuestionnaireResponses}</p>
               <p>Taux de réponse : {calculateResponseRate(coldQuestionnaireResponses, formation.enrolledCount)}</p>
+              {eventDates['Questionnaire à froid envoyé'] && <p>Dernière date : {eventDates['Questionnaire à froid envoyé']}</p>}
             </div>
           </div>
           <div>
@@ -207,6 +314,7 @@ const ActionsPopup: React.FC<{
               <p>Questionnaires OPCO envoyés : {opcoQuestionnaireSent}</p>
               <p>Réponses au questionnaire OPCO : {opcoQuestionnaireResponses}</p>
               <p>Taux de réponse : {calculateResponseRate(opcoQuestionnaireResponses, formation.enrolledCount)}</p>
+              {eventDates['Questionnaire OPCO envoyé'] && <p>Dernière date : {eventDates['Questionnaire OPCO envoyé']}</p>}
             </div>
           </div>
           <div>
@@ -215,11 +323,11 @@ const ActionsPopup: React.FC<{
             </button>
             <div className="text-sm text-gray-500 mt-2">
               <p>Emails envoyés : {emailsSent}</p>
+              {eventDates['Email envoyé'] && <p>Dernière date : {eventDates['Email envoyé']}</p>}
             </div>
           </div>
         </div>
       </div>
-//email
       {isEmailPreviewOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-3xl p-8">
@@ -235,7 +343,9 @@ const ActionsPopup: React.FC<{
                 <input
                   type="email"
                   value={emailDetails.to}
-                  onChange={(e) => setEmailDetails({ ...emailDetails, to: e.target.value })}
+                  onChange={(e) => {
+                    setEmailDetails({ ...emailDetails, to: e.target.value });
+                  }}
                   className="flex-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3"
                   placeholder="Destinataire"
                 />
@@ -245,7 +355,9 @@ const ActionsPopup: React.FC<{
                 <input
                   type="text"
                   value={emailDetails.subject}
-                  onChange={(e) => setEmailDetails({ ...emailDetails, subject: e.target.value })}
+                  onChange={(e) => {
+                    setEmailDetails({ ...emailDetails, subject: e.target.value });
+                  }}
                   className="flex-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3"
                   placeholder="Objet"
                 />
@@ -254,7 +366,9 @@ const ActionsPopup: React.FC<{
                 <FileText className="h-6 w-6 text-gray-500 mr-3" />
                 <textarea
                   value={emailDetails.body}
-                  onChange={(e) => setEmailDetails({ ...emailDetails, body: e.target.value })}
+                  onChange={(e) => {
+                    setEmailDetails({ ...emailDetails, body: e.target.value });
+                  }}
                   className="flex-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3"
                   rows={10}
                   placeholder="Corps de l'email"
@@ -294,6 +408,7 @@ const ActionsPopup: React.FC<{
           </div>
         </div>
       )}
+      <ToastContainer />
     </div>
   );
 };
