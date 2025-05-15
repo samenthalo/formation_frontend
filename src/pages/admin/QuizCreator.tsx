@@ -3,9 +3,9 @@ import { Plus, Trash2, Save } from 'lucide-react';
 
 interface Question {
   id: number;
-  text: string;
+  contenu: string;
   type: 'multiple' | 'single' | 'text';
-  options: string[];
+  options: { libelle: string; correct: boolean }[];
 }
 
 const QuizCreator = () => {
@@ -16,31 +16,44 @@ const QuizCreator = () => {
   const addQuestion = () => {
     const newQuestion: Question = {
       id: Date.now(),
-      text: '',
+      contenu: '',
       type: 'multiple',
-      options: ['Option 1'],
+      options: [{ libelle: 'Option 1', correct: false }],
     };
     setQuestions([...questions, newQuestion]);
   };
 
   const updateQuestion = (id: number, field: keyof Question, value: any) => {
-    setQuestions(questions.map(q => 
+    setQuestions(questions.map(q =>
       q.id === id ? { ...q, [field]: value } : q
     ));
   };
 
   const addOption = (questionId: number) => {
-    setQuestions(questions.map(q => 
-      q.id === questionId 
-        ? { ...q, options: [...q.options, `Option ${q.options.length + 1}`] }
+    setQuestions(questions.map(q =>
+      q.id === questionId
+        ? { ...q, options: [...q.options, { libelle: `Option ${q.options.length + 1}`, correct: false }] }
         : q
     ));
   };
 
   const removeOption = (questionId: number, optionIndex: number) => {
-    setQuestions(questions.map(q => 
-      q.id === questionId 
+    setQuestions(questions.map(q =>
+      q.id === questionId
         ? { ...q, options: q.options.filter((_, index) => index !== optionIndex) }
+        : q
+    ));
+  };
+
+  const updateOption = (questionId: number, optionIndex: number, field: keyof Question['options'][0], value: any) => {
+    setQuestions(questions.map(q =>
+      q.id === questionId
+        ? {
+            ...q,
+            options: q.options.map((option, index) =>
+              index === optionIndex ? { ...option, [field]: value } : option
+            )
+          }
         : q
     ));
   };
@@ -49,11 +62,46 @@ const QuizCreator = () => {
     setQuestions(questions.filter(q => q.id !== id));
   };
 
+  const saveQuiz = async () => {
+    const quizData = {
+      titre: title,
+      description: description,
+      type: 'quiz',
+      questions: questions.map(question => ({
+        contenu: question.contenu,
+        type: question.type,
+        reponses: question.options.map(option => ({
+          libelle: option.libelle,
+          correct: option.correct,
+        }))
+      }))
+    };
+
+    try {
+      const response = await fetch('http://localhost:8000/quiz', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(quizData),
+      });
+
+      if (response.ok) {
+        alert('Quiz saved successfully!');
+      } else {
+        alert('Failed to save quiz');
+      }
+    } catch (error) {
+      console.error('Error saving quiz:', error);
+      alert('Error saving quiz');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Créer un Quiz</h1>
-        <button className="btn-primary flex items-center space-x-2">
+        <button onClick={saveQuiz} className="btn-primary flex items-center space-x-2">
           <Save className="h-4 w-4" />
           <span>Enregistrer le quiz</span>
         </button>
@@ -104,8 +152,8 @@ const QuizCreator = () => {
               <div>
                 <input
                   type="text"
-                  value={question.text}
-                  onChange={(e) => updateQuestion(question.id, 'text', e.target.value)}
+                  value={question.contenu}
+                  onChange={(e) => updateQuestion(question.id, 'contenu', e.target.value)}
                   className="input-field"
                   placeholder="Entrez votre question"
                 />
@@ -117,7 +165,7 @@ const QuizCreator = () => {
                 </label>
                 <select
                   value={question.type}
-                  onChange={(e) => updateQuestion(question.id, 'type', e.target.value)}
+                  onChange={(e) => updateQuestion(question.id, 'type', e.target.value as 'multiple' | 'single' | 'text')}
                   className="input-field"
                 >
                   <option value="multiple">Choix multiple</option>
@@ -135,15 +183,19 @@ const QuizCreator = () => {
                     <div key={optionIndex} className="flex items-center space-x-2">
                       <input
                         type="text"
-                        value={option}
-                        onChange={(e) => {
-                          const newOptions = [...question.options];
-                          newOptions[optionIndex] = e.target.value;
-                          updateQuestion(question.id, 'options', newOptions);
-                        }}
+                        value={option.libelle}
+                        onChange={(e) => updateOption(question.id, optionIndex, 'libelle', e.target.value)}
                         className="input-field"
                         placeholder={`Option ${optionIndex + 1}`}
                       />
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={option.correct}
+                          onChange={(e) => updateOption(question.id, optionIndex, 'correct', e.target.checked)}
+                        />
+                        Correct
+                      </label>
                       <button
                         onClick={() => removeOption(question.id, optionIndex)}
                         className="text-red-500 hover:text-red-700"
