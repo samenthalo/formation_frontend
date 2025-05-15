@@ -43,6 +43,7 @@ const TraineeList = () => {
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [availableSessions, setAvailableSessions] = useState<Session[]>([]);
   const [sessions, setSessions] = useState<{ id: string; name: string }[]>([]);
+  const [selectedSessionForAdd, setSelectedSessionForAdd] = useState('');
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -223,6 +224,9 @@ const TraineeList = () => {
   };
 
   const handleSessionToggle = (session: Session, isEdit: boolean) => {
+    console.log('handleSessionToggle called with session:', session); // Log the session
+    console.log('isEdit:', isEdit); // Log isEdit
+
     const updateFormData = isEdit ? setEditFormData : setAddFormData;
     updateFormData(prev => {
       const sessions = prev.sessions;
@@ -249,6 +253,8 @@ const TraineeList = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    console.log('File uploaded:', file.name); // Log the file name
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const binaryStr = event.target?.result;
@@ -268,6 +274,7 @@ const TraineeList = () => {
                 fonction_stagiaire: row.fonction_stagiaire || null,
                 sessions: row.sessions ? JSON.parse(row.sessions) : []
               }));
+              console.log('Parsed CSV data:', parsedData); // Log parsed CSV data
               checkForDuplicatesAndUpdate(parsedData);
             }
           });
@@ -297,6 +304,7 @@ const TraineeList = () => {
             sessions: row[sessionsIndex] ? JSON.parse(row[sessionsIndex]) : []
           }));
 
+          console.log('Parsed Excel data:', parsedData); // Log parsed Excel data
           checkForDuplicatesAndUpdate(parsedData);
         }
       }
@@ -304,16 +312,49 @@ const TraineeList = () => {
     reader.readAsBinaryString(file);
   };
 
-  const checkForDuplicatesAndUpdate = (newTrainees: Trainee[]) => {
+  const saveTraineesToDatabase = async (trainees: Trainee[]) => {
+    console.log('saveTraineesToDatabase called with trainees:', trainees); // Log trainees
+
+    try {
+      const response = await fetch('http://localhost:8000/stagiaires/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(trainees),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save trainees to database');
+      }
+
+      const data = await response.json();
+      console.log('Response from server:', data); // Log response from server
+      return data;
+    } catch (error) {
+      toast.error('Erreur lors de l\'enregistrement des stagiaires en base de données');
+      console.error('Error saving trainees to database:', error);
+    }
+  };
+
+  const checkForDuplicatesAndUpdate = async (newTrainees: Trainee[]) => {
+    console.log('checkForDuplicatesAndUpdate called with newTrainees:', newTrainees); // Log newTrainees
+
     const existingEmails = trainees.map(trainee => trainee.email_stagiaire);
+    console.log('existingEmails:', existingEmails); // Log existingEmails
+
     const duplicateEmails = newTrainees.filter(trainee => existingEmails.includes(trainee.email_stagiaire));
+    console.log('duplicateEmails:', duplicateEmails); // Log duplicateEmails
 
     if (duplicateEmails.length > 0) {
       alert(`Les emails suivants existent déjà : ${duplicateEmails.map(trainee => trainee.email_stagiaire).join(', ')}`);
       const uniqueTrainees = newTrainees.filter(trainee => !existingEmails.includes(trainee.email_stagiaire));
+      console.log('uniqueTrainees:', uniqueTrainees); // Log uniqueTrainees
+      await saveTraineesToDatabase(uniqueTrainees);
       setTrainees([...trainees, ...uniqueTrainees]);
       toast.success(`${uniqueTrainees.length} stagiaires ajoutés avec succès`);
     } else {
+      await saveTraineesToDatabase(newTrainees);
       setTrainees([...trainees, ...newTrainees]);
       toast.success(`${newTrainees.length} stagiaires ajoutés avec succès`);
     }
@@ -325,15 +366,62 @@ const TraineeList = () => {
     );
   };
 
-  const handleAddTraineesToSession = (sessionId: string) => {
+  const handleAddTraineesToSession = async (sessionId: string) => {
+    console.log('handleAddTraineesToSession called with sessionId:', sessionId); // Log the sessionId
+
+    if (!sessionId) {
+      toast.error('Veuillez sélectionner une session');
+      return;
+    }
+
+    const sessionIdNumber = parseInt(sessionId, 10); // Convert sessionId to a number
+
+    console.log('availableSessions IDs:', availableSessions.map(session => session.id_session)); // Log availableSessions IDs
+
+    const sessionToAdd = availableSessions.find(session => session.id_session === sessionIdNumber);
+    console.log('sessionToAdd:', sessionToAdd); // Log sessionToAdd
+
+    if (!sessionToAdd) {
+      toast.error('Session non trouvée');
+      return;
+    }
+
     const updatedTrainees = trainees.map(trainee =>
       selectedTrainees.includes(trainee.id_stagiaire)
-        ? { ...trainee, sessions: [...trainee.sessions || [], availableSessions.find(s => s.id === sessionId)!] }
+        ? {
+            ...trainee,
+            sessions: [...(trainee.sessions || []), sessionToAdd]
+          }
         : trainee
     );
-    setTrainees(updatedTrainees);
-    setSelectedTrainees([]);
-    toast.success('Stagiaires ajoutés à la session avec succès');
+
+    try {
+      // Mettez à jour la base de données
+      const response = await fetch('http://localhost:8000/stagiaires/update-sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          trainees: selectedTrainees,
+          sessionId: sessionIdNumber
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update trainees in the database');
+      }
+
+      const data = await response.json();
+      console.log('Response from server:', data); // Log response from server
+
+      setTrainees(updatedTrainees);
+      setSelectedTrainees([]);
+      toast.success('Stagiaires ajoutés à la session avec succès');
+    } catch (error) {
+      toast.error('Erreur lors de la mise à jour des stagiaires dans la base de données');
+      console.error('Error updating trainees in the database:', error);
+    }
   };
 
   const filteredTrainees = trainees
@@ -392,22 +480,34 @@ const TraineeList = () => {
               className="hidden"
             />
           </label>
-          {selectedTrainees.length > 0 && (
-            <select
-              className="border border-gray-300 rounded-md px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              onChange={(e) => handleAddTraineesToSession(e.target.value)}
-              defaultValue=""
-            >
-              <option value="" disabled>Ajouter à une session</option>
-              {availableSessions.map(session => (
+{selectedTrainees.length > 0 && (
+    <div className="flex space-x-2">
+        <select
+            className="border border-gray-300 rounded-md px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            onChange={(e) => setSelectedSessionForAdd(e.target.value)}
+            defaultValue=""
+        >
+            <option value="" disabled>Sélectionner une session</option>
+            {availableSessions.map(session => (
                 <option key={session.id_session} value={session.id_session}>
-                  {session.titre}
+                    {session.titre}
                 </option>
-              ))}
-            </select>
-          )}
+            ))}
+        </select>
+        <button
+            onClick={() => handleAddTraineesToSession(selectedSessionForAdd)}
+            className="bg-primary text-white px-4 py-2 rounded-md flex items-center space-x-2 hover:bg-primary-dark"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+            <span>Ajouter à la session sélectionnée</span>
+        </button>
+    </div>
+)}
         </div>
       </div>
+
 
       <div className="bg-white rounded-lg shadow-md">
         <div className="p-6 border-b border-gray-200">
