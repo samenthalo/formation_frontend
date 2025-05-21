@@ -397,7 +397,7 @@ const TraineeList = () => {
 
     try {
       // Mettez à jour la base de données
-      const response = await fetch('http://localhost:8000/stagiaires/update-sessions', {
+      const response = await fetch('http://localhost:8000/update-sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

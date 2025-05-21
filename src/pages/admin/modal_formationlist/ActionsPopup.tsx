@@ -92,7 +92,7 @@ const ActionsPopup: React.FC<{
           const year = date.getFullYear();
           return {
             ...item,
-            dateEvenement: `${month}/${day}/${year}`
+            dateEvenement: `${year}-${month}-${day}` // Format YYYY-MM-DD
           };
         });
       } else {
@@ -115,7 +115,7 @@ const ActionsPopup: React.FC<{
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const year = date.getFullYear();
-    const dateEvenement = `${day}/${month}/${year}`;
+    const dateEvenement = `${year}-${month}-${day}`; // Format YYYY-MM-DD
 
     let description;
     switch (typeEvenement) {

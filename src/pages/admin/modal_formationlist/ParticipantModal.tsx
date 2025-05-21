@@ -64,13 +64,14 @@ const AddParticipantModal = ({ allStagiaires, selectedStagiaires, onClose, onAdd
     });
   };
 
-  const sendEventToChronologie = async (typeEvenement, description, participants = []) => {
+const sendEventToChronologie = async (typeEvenement, description, participants = []) => {
     if (!formation.id_session) {
       toast.error('ID de la session manquant');
       return;
     }
 
-    const dateEvenement = new Date().toLocaleString('fr-FR', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+    const date = new Date();
+    const dateEvenement = date.toISOString().replace('T', ' ').replace(/\..*$/, ''); // Format YYYY-MM-DD HH:MM:SS
 
     let detailedDescription = description;
     if (participants.length > 0) {
@@ -84,6 +85,8 @@ const AddParticipantModal = ({ allStagiaires, selectedStagiaires, onClose, onAdd
       description: detailedDescription
     };
 
+    console.log('Données envoyées à l\'API:', chronologieData); // Log des données envoyées
+
     try {
       const response = await axios.post('http://localhost:8000/chronologie/', chronologieData);
       if (response.status === 200) {
@@ -92,9 +95,10 @@ const AddParticipantModal = ({ allStagiaires, selectedStagiaires, onClose, onAdd
         console.error('Erreur lors de l\'enregistrement de l\'événement dans la chronologie.');
       }
     } catch (error) {
-      console.error('Erreur lors de l\'enregistrement de l\'événement dans la chronologie:', error);
+      console.error('Erreur lors de l\'enregistrement de l\'événement dans la chronologie:', error.response ? error.response.data : error.message);
     }
   };
+
 
   const handleSaveAdditions = async () => {
     try {
@@ -109,7 +113,7 @@ const AddParticipantModal = ({ allStagiaires, selectedStagiaires, onClose, onAdd
 
         // Récupérer les détails des stagiaires ajoutés
         const addedParticipants = allStagiaires.filter(stagiaire => addedStagiaires.includes(stagiaire.id_stagiaire));
-        await sendEventToChronologie('Ajout de participants', `Ajout de ${addedStagiaires.length} participant(s) à la session`, addedParticipants);
+        await sendEventToChronologie('participant_added', `Ajout de ${addedStagiaires.length} participant(s) à la session`, addedParticipants);
 
         onClose();
       }
@@ -277,7 +281,16 @@ const ParticipantModal = ({ formation, onClose, onSave, statut }) => {
       return;
     }
 
-    const dateEvenement = new Date().toLocaleString('fr-FR', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+    // Format de date attendu par le serveur pour un champ datetime
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    const dateEvenement = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`; // Format YYYY-MM-DD HH:MM:SS
 
     let detailedDescription = description;
     if (participants.length > 0) {
@@ -291,6 +304,8 @@ const ParticipantModal = ({ formation, onClose, onSave, statut }) => {
       description: detailedDescription
     };
 
+    console.log('Données envoyées à l\'API:', chronologieData); // Log des données envoyées
+
     try {
       const response = await axios.post('http://localhost:8000/chronologie/', chronologieData);
       if (response.status === 200) {
@@ -299,9 +314,10 @@ const ParticipantModal = ({ formation, onClose, onSave, statut }) => {
         console.error('Erreur lors de l\'enregistrement de l\'événement dans la chronologie.');
       }
     } catch (error) {
-      console.error('Erreur lors de l\'enregistrement de l\'événement dans la chronologie:', error);
+      console.error('Erreur lors de l\'enregistrement de l\'événement dans la chronologie:', error.response ? error.response.data : error.message);
     }
   };
+
 
   const handleSave = async () => {
     if (!formation.id_session) {
@@ -322,7 +338,7 @@ const ParticipantModal = ({ formation, onClose, onSave, statut }) => {
         });
 
         const removedParticipants = allStagiaires.filter(stagiaire => removedStagiaires.includes(stagiaire.id_stagiaire));
-        await sendEventToChronologie('Suppression de participants', `Suppression de ${removedStagiaires.length} participant(s) de la session`, removedParticipants);
+        await sendEventToChronologie('participant_removed', `Suppression de ${removedStagiaires.length} participant(s) de la session`, removedParticipants);
         toast.success(`${removedStagiaires.length} participant(s) supprimé(s) avec succès.`);
       }
 
@@ -338,6 +354,7 @@ const ParticipantModal = ({ formation, onClose, onSave, statut }) => {
 
   const handleRemoveParticipant = async (stagiaireId) => {
     try {
+      // Suppression du participant
       await axios.delete('http://localhost:8000/inscriptions', {
         data: {
           ids: [stagiaireId],
@@ -345,10 +362,15 @@ const ParticipantModal = ({ formation, onClose, onSave, statut }) => {
         }
       });
 
+      // Récupérer les détails du participant supprimé
       const removedParticipants = allStagiaires.filter(stagiaire => stagiaire.id_stagiaire === stagiaireId);
-      await sendEventToChronologie('Suppression de participants', `Suppression d'un participant de la session`, removedParticipants);
+
+      // Envoyer l'événement à la chronologie
+      await sendEventToChronologie('participant_removed', `Suppression d'un participant de la session`, removedParticipants);
+
       toast.success('Participant supprimé avec succès.');
 
+      // Mettre à jour la liste des participants sélectionnés
       setSelectedStagiaires(prevSelected => {
         const newSelected = new Set(prevSelected);
         newSelected.delete(stagiaireId);
@@ -360,6 +382,7 @@ const ParticipantModal = ({ formation, onClose, onSave, statut }) => {
       console.error('Erreur lors de la suppression du participant:', error);
     }
   };
+
 
   const getRegisteredParticipants = () => {
     return allStagiaires.filter(stagiaire => selectedStagiaires.has(stagiaire.id_stagiaire));

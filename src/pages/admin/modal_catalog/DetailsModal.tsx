@@ -12,7 +12,6 @@ interface DetailsModalProps {
   onDownloadPDF: () => void;
 }
 
-
 const DetailsModal: React.FC<DetailsModalProps> = ({
   selectedFormation,
   isOpen,
@@ -21,9 +20,22 @@ const DetailsModal: React.FC<DetailsModalProps> = ({
   onDelete,
   onDownloadPDF,
 }) => {
-  if (!isOpen || !selectedFormation) return null;
-
   const contentToExportRef = React.useRef<HTMLDivElement>(null);
+
+  const handleDownloadPDF = () => {
+    if (contentToExportRef.current) {
+      const opt = {
+        margin: 1,
+        filename: `${selectedFormation?.titre}.pdf`,
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+      };
+
+      html2pdf().from(contentToExportRef.current).set(opt).save();
+    }
+  };
+
+  if (!isOpen || !selectedFormation) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -35,19 +47,15 @@ const DetailsModal: React.FC<DetailsModalProps> = ({
           </button>
         </div>
         <div ref={contentToExportRef} className="space-y-4">
-  <h1 className="text-xl font-bold mb-2">{selectedFormation.titre}</h1>
-  <div>
-    <h3 className="text-lg font-semibold mb-1 text-blue-500">Programme de la formation :</h3>
-    <div
-      className="space-y-2 ql-editor"
-      dangerouslySetInnerHTML={{ __html: selectedFormation.programme || '' }}
-    />
-  </div>
-
-
+          <h1 className="text-xl font-bold mb-2">{selectedFormation.titre}</h1>
+          <div>
+            <h3 className="text-lg font-semibold mb-1 text-blue-500">Programme de la formation :</h3>
+            <div
+              className="space-y-2 ql-editor"
+              dangerouslySetInnerHTML={{ __html: selectedFormation.programme || '' }}
+            />
+          </div>
         </div>
-
-        {/* Bloc sessions supprimé */}
 
         <div className="border-t border-gray-200 flex justify-between items-center pt-4">
           <button onClick={onClose} className="btn-secondary">
@@ -58,7 +66,7 @@ const DetailsModal: React.FC<DetailsModalProps> = ({
               <Edit className="h-3 w-3" />
               <span>Modifier</span>
             </button>
-            <button onClick={onDownloadPDF} className="btn-primary">
+            <button onClick={handleDownloadPDF} className="btn-primary">
               Télécharger en PDF
             </button>
             <button
