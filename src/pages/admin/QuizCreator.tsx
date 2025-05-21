@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save } from 'lucide-react';
 
 interface Question {
@@ -8,10 +8,36 @@ interface Question {
   options: { libelle: string; correct: boolean }[];
 }
 
+interface Formation {
+  id_formation: number;
+  titre: string;
+}
+
 const QuizCreator = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [formations, setFormations] = useState<Formation[]>([]);
+  const [selectedFormation, setSelectedFormation] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Fetch formations from the backend
+    fetch('http://localhost:8000/formations')
+      .then(response => response.json())
+      .then(data => {
+        setFormations(data);
+        console.log('Formations récupérées:', data);
+        // Vérifiez que chaque formation a un id_formation valide
+        data.forEach(formation => {
+          console.log('ID de la formation:', formation.id_formation, typeof formation.id_formation);
+        });
+      })
+      .catch(error => console.error('Erreur lors de la récupération des formations:', error));
+  }, []);
+
+  useEffect(() => {
+    console.log('Valeur initiale de selectedFormation:', selectedFormation);
+  }, [selectedFormation]);
 
   const addQuestion = () => {
     const newQuestion: Question = {
@@ -63,16 +89,27 @@ const QuizCreator = () => {
   };
 
   const saveQuiz = async () => {
+    if (!selectedFormation) {
+      console.log('Aucune formation sélectionnée');
+      alert('Veuillez sélectionner une formation');
+      return;
+    }
+
+    console.log('Formation sélectionnée:', selectedFormation);
+
     const quizData = {
       titre: title,
       description: description,
+      tauxReussite: 70,
       type: 'quiz',
+      id_formation: selectedFormation,
       questions: questions.map(question => ({
         contenu: question.contenu,
         type: question.type,
         reponses: question.options.map(option => ({
           libelle: option.libelle,
           correct: option.correct,
+          note: option.correct ? 10 : 0,
         }))
       }))
     };
@@ -86,14 +123,15 @@ const QuizCreator = () => {
         body: JSON.stringify(quizData),
       });
 
+      const responseData = await response.json();
       if (response.ok) {
-        alert('Quiz saved successfully!');
+        alert('Quiz enregistré avec succès!');
       } else {
-        alert('Failed to save quiz');
+        alert('Échec de l\'enregistrement du quiz');
       }
     } catch (error) {
-      console.error('Error saving quiz:', error);
-      alert('Error saving quiz');
+      console.error('Erreur lors de l\'enregistrement du quiz:', error);
+      alert('Erreur lors de l\'enregistrement du quiz');
     }
   };
 
@@ -132,6 +170,28 @@ const QuizCreator = () => {
             rows={3}
             placeholder="Décrivez l'objectif du quiz"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Formation
+          </label>
+          <select
+            value={selectedFormation || ''}
+            onChange={(e) => {
+              const value = e.target.value === '' ? null : Number(e.target.value);
+              console.log('Valeur sélectionnée:', value);
+              setSelectedFormation(value);
+            }}
+            className="input-field"
+          >
+            <option value="">Sélectionnez une formation</option>
+            {formations.map(formation => (
+              <option key={formation.id_formation} value={formation.id_formation}>
+                {formation.titre}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -180,7 +240,7 @@ const QuizCreator = () => {
                     Options de réponse
                   </label>
                   {question.options.map((option, optionIndex) => (
-                    <div key={optionIndex} className="flex items-center space-x-2">
+                    <div key={`${question.id}-${optionIndex}`} className="flex items-center space-x-2">
                       <input
                         type="text"
                         value={option.libelle}
