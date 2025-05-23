@@ -7,7 +7,7 @@ interface Question {
   id: number;
   text: string;
   type: 'rating' | 'text' | 'multiple' | 'single';
-  options?: string[];
+  options?: { text: string; correct: boolean }[];
   required: boolean;
 }
 
@@ -24,13 +24,11 @@ const SurveyCreator = () => {
   const [selectedFormation, setSelectedFormation] = useState<number | null>(null);
 
   useEffect(() => {
-    // Fetch formations from the backend
     fetch('http://localhost:8000/formations')
       .then(response => response.json())
       .then(data => {
         setFormations(data);
         console.log('Formations récupérées:', data);
-        // Vérifiez que chaque formation a un id_formation valide
         data.forEach(formation => {
           console.log('ID de la formation:', formation.id_formation, typeof formation.id_formation);
         });
@@ -71,24 +69,39 @@ const SurveyCreator = () => {
 
     console.log('Formation sélectionnée:', selectedFormation);
 
+    const mapQuestionType = (type) => {
+      switch (type) {
+        case 'single':
+          return 'choix_unique';
+        case 'multiple':
+          return 'choix_multiple';
+        case 'rating':
+          return 'note';
+        case 'text':
+          return 'reponse_libre';
+        default:
+          return 'reponse_libre';
+      }
+    };
+
     const surveyData = {
       titre: title,
       description: description,
-      tauxReussite: 70, // Example value
+      tauxReussite: 70,
       type: 'questionnaire',
-      id_formation: selectedFormation, // Assurez-vous que cela est inclus
+      id_formation: selectedFormation,
       questions: questions.map(question => ({
         contenu: question.text,
-        type: question.type,
+        type: mapQuestionType(question.type),
         reponses: question.options ? question.options.map(option => ({
-          libelle: option,
-          correct: false, // Example value
-          note: 0 // Example value
+          libelle: option.text,
+          correct: option.correct,
+          note: 0
         })) : []
       }))
     };
 
-    console.log('Données du questionnaire à envoyer:', surveyData); // Log des données à envoyer
+    console.log('Données du questionnaire à envoyer:', surveyData);
 
     try {
       const response = await fetch('http://localhost:8000/questionnaire', {
@@ -100,7 +113,7 @@ const SurveyCreator = () => {
       });
 
       const responseData = await response.json();
-      console.log('Réponse du serveur:', responseData); // Log de la réponse du serveur
+      console.log('Réponse du serveur:', responseData);
 
       if (response.ok) {
         toast.success('Questionnaire enregistré avec succès');
@@ -178,12 +191,23 @@ const SurveyCreator = () => {
           <div key={question.id} className="bg-white rounded-lg shadow-md p-6">
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-lg font-medium">Question {index + 1}</h3>
-              <button
-                onClick={() => removeQuestion(question.id)}
-                className="text-red-500 hover:text-red-700"
-              >
-                <Trash2 className="h-5 w-5" />
-              </button>
+              <div className="flex space-x-2">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={question.required}
+                    onChange={(e) => updateQuestion(question.id, 'required', e.target.checked)}
+                    className="h-4 w-4 text-primary rounded border-gray-300"
+                  />
+                  <span>Obligatoire</span>
+                </label>
+                <button
+                  onClick={() => removeQuestion(question.id)}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -197,34 +221,20 @@ const SurveyCreator = () => {
                 />
               </div>
 
-              <div className="flex space-x-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Type de réponse
-                  </label>
-                  <select
-                    value={question.type}
-                    onChange={(e) => updateQuestion(question.id, 'type', e.target.value as 'rating' | 'text' | 'multiple' | 'single')}
-                    className="input-field"
-                  >
-                    <option value="rating">Note (1-5)</option>
-                    <option value="text">Réponse libre</option>
-                    <option value="multiple">Choix multiple</option>
-                    <option value="single">Choix unique</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={question.required}
-                    onChange={(e) => updateQuestion(question.id, 'required', e.target.checked)}
-                    className="h-4 w-4 text-primary rounded border-gray-300"
-                  />
-                  <label className="text-sm text-gray-700">
-                    Obligatoire
-                  </label>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Type de réponse
+                </label>
+                <select
+                  value={question.type}
+                  onChange={(e) => updateQuestion(question.id, 'type', e.target.value as 'rating' | 'text' | 'multiple' | 'single')}
+                  className="input-field"
+                >
+                  <option value="rating">Note (1-5)</option>
+                  <option value="text">Réponse libre</option>
+                  <option value="multiple">Choix multiple</option>
+                  <option value="single">Choix unique</option>
+                </select>
               </div>
 
               {(question.type === 'multiple' || question.type === 'single') && (
@@ -236,10 +246,10 @@ const SurveyCreator = () => {
                     <div key={optionIndex} className="flex items-center space-x-2">
                       <input
                         type="text"
-                        value={option}
+                        value={option.text}
                         onChange={(e) => {
                           const newOptions = [...(question.options || [])];
-                          newOptions[optionIndex] = e.target.value;
+                          newOptions[optionIndex] = { ...newOptions[optionIndex], text: e.target.value };
                           updateQuestion(question.id, 'options', newOptions);
                         }}
                         className="input-field"
@@ -258,7 +268,7 @@ const SurveyCreator = () => {
                   ))}
                   <button
                     onClick={() => {
-                      const newOptions = [...(question.options || []), `Option ${(question.options?.length || 0) + 1}`];
+                      const newOptions = [...(question.options || []), { text: '', correct: false }];
                       updateQuestion(question.id, 'options', newOptions);
                     }}
                     className="btn-secondary flex items-center space-x-2 text-sm"
