@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trash, Pencil, Mail, Tag, FileText } from 'lucide-react';
+import { X, Trash, Pencil, Mail, Tag, FileText, CheckSquare } from 'lucide-react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import axios from 'axios';
 
 interface Formation {
   id_session: string;
@@ -24,6 +25,7 @@ const ActionsPopup: React.FC<{
   formation: Formation;
 }> = ({ onClose, formation }) => {
   const [isEmailPreviewOpen, setIsEmailPreviewOpen] = useState(false);
+  const [isAddTraineeModalOpen, setIsAddTraineeModalOpen] = useState(false);
   const [presenceSheetsSent, setPresenceSheetsSent] = useState(0);
   const [signaturesCount, setSignaturesCount] = useState(0);
   const [quizzSent, setQuizzSent] = useState(0);
@@ -35,6 +37,8 @@ const ActionsPopup: React.FC<{
   const [opcoQuestionnaireSent, setOpcoQuestionnaireSent] = useState(0);
   const [opcoQuestionnaireResponses, setOpcoQuestionnaireResponses] = useState(0);
   const [emailsSent, setEmailsSent] = useState(0);
+  const [participantsRegistered, setParticipantsRegistered] = useState(0);
+  const [conventionsGenerated, setConventionsGenerated] = useState(0);
   const [eventDates, setEventDates] = useState<{ [key: string]: string }>({});
   const [emailDetails, setEmailDetails] = useState({
     to: 'destinataire@example.com',
@@ -58,6 +62,16 @@ const ActionsPopup: React.FC<{
     attachments: ['Programme de la formation.pdf', 'Livret d\'accueil.pdf']
   });
 
+  const [formData, setFormData] = useState({
+    nom_stagiaire: '',
+    prenom_stagiaire: '',
+    telephone_stagiaire: '',
+    email_stagiaire: '',
+    entreprise_stagiaire: '',
+    fonction_stagiaire: '',
+    sessions: [{ id_session: formation.id_session, title: formation.title }],
+  });
+
   useEffect(() => {
     const fetchData = async () => {
       const data = await fetchChronologieData();
@@ -67,8 +81,9 @@ const ActionsPopup: React.FC<{
       setColdQuestionnaireSent(data.filter(item => item.typeEvenement === 'Questionnaire à froid envoyé').length);
       setOpcoQuestionnaireSent(data.filter(item => item.typeEvenement === 'Questionnaire OPCO envoyé').length);
       setEmailsSent(data.filter(item => item.typeEvenement === 'Email envoyé').length);
+      setParticipantsRegistered(data.filter(item => item.typeEvenement === 'Participants enregistrés').length);
+      setConventionsGenerated(data.filter(item => item.typeEvenement === 'Conventions générées').length);
 
-      // Extract the latest dates for each event type
       const dates: { [key: string]: string } = {};
       data.forEach(item => {
         if (!dates[item.typeEvenement] || new Date(item.dateEvenement) > new Date(dates[item.typeEvenement])) {
@@ -92,7 +107,7 @@ const ActionsPopup: React.FC<{
           const year = date.getFullYear();
           return {
             ...item,
-            dateEvenement: `${year}-${month}-${day}` // Format YYYY-MM-DD
+            dateEvenement: `${year}-${month}-${day}`
           };
         });
       } else {
@@ -105,7 +120,7 @@ const ActionsPopup: React.FC<{
     }
   };
 
-  const sendEventToBackend = async (typeEvenement: string) => {
+  const sendEventToBackend = async (typeEvenement: string, participantDetails?: { nom: string; prenom: string; email: string }) => {
     if (!formation.id_session) {
       toast.error('ID de la session manquant');
       return;
@@ -115,7 +130,11 @@ const ActionsPopup: React.FC<{
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const year = date.getFullYear();
-    const dateEvenement = `${year}-${month}-${day}`; // Format YYYY-MM-DD
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
+
+    const dateEvenement = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 
     let description;
     switch (typeEvenement) {
@@ -137,6 +156,12 @@ const ActionsPopup: React.FC<{
       case 'Email envoyé':
         description = `Email envoyé pour la session`;
         break;
+      case 'Participants enregistrés':
+        description = `Participants enregistrés pour la session: ${participantDetails?.nom} ${participantDetails?.prenom} (${participantDetails?.email})`;
+        break;
+      case 'Conventions générées':
+        description = `Conventions générées pour la session`;
+        break;
       default:
         description = `Événement inconnu pour la session`;
     }
@@ -148,8 +173,6 @@ const ActionsPopup: React.FC<{
       description: description
     };
 
-    console.log('Données envoyées à l\'API:', chronologieData);
-
     try {
       const response = await fetch('http://localhost:8000/chronologie/', {
         method: 'POST',
@@ -159,12 +182,12 @@ const ActionsPopup: React.FC<{
         body: JSON.stringify(chronologieData)
       });
 
-      console.log('Réponse brute de l\'API:', response);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('Réponse JSON de l\'API:', data);
-        toast.success(getSuccessMessage(typeEvenement));
+        const successMessage = getSuccessMessage(typeEvenement);
+        if (successMessage && typeEvenement !== 'Participants enregistrés') {
+          toast.success(successMessage);
+        }
       } else {
         const errorData = await response.json();
         console.error('Erreur de l\'API:', errorData);
@@ -190,8 +213,12 @@ const ActionsPopup: React.FC<{
         return 'Le questionnaire OPCO a bien été envoyé.';
       case 'Email envoyé':
         return 'L\'email a bien été envoyé.';
+      case 'Participants enregistrés':
+        return '';
+      case 'Conventions générées':
+        return 'Les conventions ont bien été générées.';
       default:
-        return 'L\'événement a bien été enregistré.';
+        return '';
     }
   };
 
@@ -253,16 +280,103 @@ const ActionsPopup: React.FC<{
     return total ? (responses / total * 100).toFixed(2) + '%' : '0%';
   };
 
+  const handleRegisterParticipants = () => {
+    setIsAddTraineeModalOpen(true);
+  };
+
+  const handleGenerateConventions = () => {
+    sendEventToBackend('Conventions générées');
+    setConventionsGenerated(prev => prev + 1);
+  };
+
+  const handleSubmitTrainee = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const formDataToSend = new FormData();
+    formDataToSend.append('nom_stagiaire', formData.nom_stagiaire);
+    formDataToSend.append('prenom_stagiaire', formData.prenom_stagiaire);
+    formDataToSend.append('telephone_stagiaire', formData.telephone_stagiaire);
+    formDataToSend.append('email_stagiaire', formData.email_stagiaire);
+    formDataToSend.append('entreprise_stagiaire', formData.entreprise_stagiaire);
+    formDataToSend.append('fonction_stagiaire', formData.fonction_stagiaire);
+    formDataToSend.append('id_session', formData.sessions[0].id_session);
+
+    try {
+      const response = await axios.post('http://localhost:8000/stagiaires', formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // Send event to backend with participant details
+      sendEventToBackend('Participants enregistrés', {
+        nom: formData.nom_stagiaire,
+        prenom: formData.prenom_stagiaire,
+        email: formData.email_stagiaire
+      });
+
+      setParticipantsRegistered(prev => prev + 1);
+      setIsAddTraineeModalOpen(false);
+
+      // Réinitialiser formData
+      setFormData({
+        nom_stagiaire: '',
+        prenom_stagiaire: '',
+        telephone_stagiaire: '',
+        email_stagiaire: '',
+        entreprise_stagiaire: '',
+        fonction_stagiaire: '',
+        sessions: [{ id_session: formation.id_session, title: formation.title }],
+      });
+
+      toast.success('Le participant a été ajouté avec succès.');
+    } catch (error) {
+      console.error('Erreur lors de l\'ajout du stagiaire:', error);
+      toast.error('Erreur lors de l\'ajout du stagiaire');
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsAddTraineeModalOpen(false);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-4xl p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-gray-800">Actions et Statistiques</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             <X className="h-6 w-6" />
           </button>
         </div>
-        <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <button onClick={handleRegisterParticipants} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
+              Enregistrer les participants
+            </button>
+            <div className="text-sm text-gray-500 mt-2">
+              <p>Participants enregistrés : {participantsRegistered}</p>
+              {eventDates['Participants enregistrés'] && <p>Dernière date : {eventDates['Participants enregistrés']}</p>}
+            </div>
+          </div>
+          <div>
+            <button onClick={handleGenerateConventions} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
+              Générer les Conventions
+            </button>
+            <div className="text-sm text-gray-500 mt-2">
+              <p>Conventions générées : {conventionsGenerated}</p>
+              {eventDates['Conventions générées'] && <p>Dernière date : {eventDates['Conventions générées']}</p>}
+            </div>
+          </div>
+          <div>
+            <button onClick={handleSendEmail} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
+              Envoyer Email
+            </button>
+            <div className="text-sm text-gray-500 mt-2">
+              <p>Emails envoyés : {emailsSent}</p>
+              {eventDates['Email envoyé'] && <p>Dernière date : {eventDates['Email envoyé']}</p>}
+            </div>
+          </div>
           <div>
             <button onClick={handleSendPresenceSheet} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
               Envoyer feuille de présence
@@ -304,26 +418,6 @@ const ActionsPopup: React.FC<{
               <p>Réponses au questionnaire à froid : {coldQuestionnaireResponses}</p>
               <p>Taux de réponse : {calculateResponseRate(coldQuestionnaireResponses, formation.enrolledCount)}</p>
               {eventDates['Questionnaire à froid envoyé'] && <p>Dernière date : {eventDates['Questionnaire à froid envoyé']}</p>}
-            </div>
-          </div>
-          <div>
-            <button onClick={handleSendOpcoQuestionnaire} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
-              Envoyer questionnaire OPCO
-            </button>
-            <div className="text-sm text-gray-500 mt-2">
-              <p>Questionnaires OPCO envoyés : {opcoQuestionnaireSent}</p>
-              <p>Réponses au questionnaire OPCO : {opcoQuestionnaireResponses}</p>
-              <p>Taux de réponse : {calculateResponseRate(opcoQuestionnaireResponses, formation.enrolledCount)}</p>
-              {eventDates['Questionnaire OPCO envoyé'] && <p>Dernière date : {eventDates['Questionnaire OPCO envoyé']}</p>}
-            </div>
-          </div>
-          <div>
-            <button onClick={handleSendEmail} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
-              Envoyer Email
-            </button>
-            <div className="text-sm text-gray-500 mt-2">
-              <p>Emails envoyés : {emailsSent}</p>
-              {eventDates['Email envoyé'] && <p>Dernière date : {eventDates['Email envoyé']}</p>}
             </div>
           </div>
         </div>
@@ -405,6 +499,92 @@ const ActionsPopup: React.FC<{
                 Envoyer
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {isAddTraineeModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-900">Ajouter un stagiaire</h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <form onSubmit={handleSubmitTrainee}>
+              <div className="p-6">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Nom</label>
+                  <input
+                    type="text"
+                    value={formData.nom_stagiaire}
+                    onChange={(e) => setFormData({ ...formData, nom_stagiaire: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Prénom</label>
+                  <input
+                    type="text"
+                    value={formData.prenom_stagiaire}
+                    onChange={(e) => setFormData({ ...formData, prenom_stagiaire: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Téléphone</label>
+                  <input
+                    type="text"
+                    value={formData.telephone_stagiaire}
+                    onChange={(e) => setFormData({ ...formData, telephone_stagiaire: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <input
+                    type="email"
+                    value={formData.email_stagiaire}
+                    onChange={(e) => setFormData({ ...formData, email_stagiaire: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Entreprise</label>
+                  <input
+                    type="text"
+                    value={formData.entreprise_stagiaire}
+                    onChange={(e) => setFormData({ ...formData, entreprise_stagiaire: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Fonction</label>
+                  <input
+                    type="text"
+                    value={formData.fonction_stagiaire}
+                    onChange={(e) => setFormData({ ...formData, fonction_stagiaire: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3"
+                  />
+                </div>
+              </div>
+              <div className="p-6 border-t border-gray-200 flex justify-end space-x-4">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="bg-secondary text-white px-4 py-2 rounded-md hover:bg-secondary-dark"
+                >
+                  Annuler
+                </button>
+                <button type="submit" className="bg-primary text-white px-4 py-2 rounded-md flex items-center space-x-2 hover:bg-primary-dark">
+                  <CheckSquare className="h-5 w-5" />
+                  <span>Ajouter</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
