@@ -285,8 +285,12 @@ const ActionsPopup: React.FC<{
   };
 
   const handleGenerateConventions = () => {
+    // Envoyer l'événement au backend
     sendEventToBackend('Conventions générées');
     setConventionsGenerated(prev => prev + 1);
+
+    // Rediriger vers l'URL avec l'ID de session en tant que paramètre
+    window.location.href = `http://localhost:5173/admin/documents?id_session=${formation.id_session}`;
   };
 
   const handleSubmitTrainee = async (e: React.FormEvent) => {
