@@ -39,6 +39,7 @@ const ActionsPopup: React.FC<{
   const [emailsSent, setEmailsSent] = useState(0);
   const [participantsRegistered, setParticipantsRegistered] = useState(0);
   const [conventionsGenerated, setConventionsGenerated] = useState(0);
+  const [certificatesSent, setCertificatesSent] = useState(0);
   const [eventDates, setEventDates] = useState<{ [key: string]: string }>({});
   const [emailDetails, setEmailDetails] = useState({
     to: 'destinataire@example.com',
@@ -83,6 +84,7 @@ const ActionsPopup: React.FC<{
       setEmailsSent(data.filter(item => item.typeEvenement === 'Email envoyé').length);
       setParticipantsRegistered(data.filter(item => item.typeEvenement === 'Participants enregistrés').length);
       setConventionsGenerated(data.filter(item => item.typeEvenement === 'Conventions générées').length);
+      setCertificatesSent(data.filter(item => item.typeEvenement === 'Attestation de fin de formation envoyée').length);
 
       const dates: { [key: string]: string } = {};
       data.forEach(item => {
@@ -162,6 +164,9 @@ const ActionsPopup: React.FC<{
       case 'Conventions générées':
         description = `Conventions générées pour la session`;
         break;
+      case 'Attestation de fin de formation envoyée':
+        description = `Attestation de fin de formation envoyée pour la session`;
+        break;
       default:
         description = `Événement inconnu pour la session`;
     }
@@ -217,6 +222,8 @@ const ActionsPopup: React.FC<{
         return '';
       case 'Conventions générées':
         return 'Les conventions ont bien été générées.';
+      case 'Attestation de fin de formation envoyée':
+        return 'L\'attestation de fin de formation a bien été envoyée.';
       default:
         return '';
     }
@@ -226,27 +233,38 @@ const ActionsPopup: React.FC<{
     sendEventToBackend('Feuille de présence envoyée');
     setPresenceSheetsSent(prev => prev + 1);
     setSignaturesCount(prev => prev + 1);
+    window.location.href = `http://localhost:5173/admin/attendance-sheet?id_session=${formation.id_session}`;
   };
 
-  const handleSendQuizz = () => {
-    sendEventToBackend('Quiz envoyé');
-    setQuizzSent(prev => prev + 1);
+const handleSendQuizz = () => {
+  sendEventToBackend('Quiz envoyé');
+  setQuizzSent(prev => prev + 1);
+  window.location.href = `http://localhost:5173/admin/quiz-list?id_session=${formation.id_session}`;
+};
+
+const handleSendSatisfaction = () => {
+  sendEventToBackend('Enquête de satisfaction envoyée');
+  setSatisfactionSent(prev => prev + 1);
+  window.location.href = `http://localhost:5173/admin/survey-list?id_session=${formation.id_session}`;
+};
+
+  const handleSendCertificate = () => {
+    sendEventToBackend('Attestation de fin de formation envoyée');
+    setCertificatesSent(prev => prev + 1);
+    window.location.href = `http://localhost:5173/admin/documents?id_session=${formation.id_session}`;
   };
 
-  const handleSendSatisfaction = () => {
-    sendEventToBackend('Enquête de satisfaction envoyée');
-    setSatisfactionSent(prev => prev + 1);
-  };
+const handleSendColdQuestionnaire = () => {
+  sendEventToBackend('Questionnaire à froid envoyé');
+  setColdQuestionnaireSent(prev => prev + 1);
+  window.location.href = `http://localhost:5173/admin/survey-list?id_session=${formation.id_session}`;
+};
 
-  const handleSendColdQuestionnaire = () => {
-    sendEventToBackend('Questionnaire à froid envoyé');
-    setColdQuestionnaireSent(prev => prev + 1);
-  };
-
-  const handleSendOpcoQuestionnaire = () => {
-    sendEventToBackend('Questionnaire OPCO envoyé');
-    setOpcoQuestionnaireSent(prev => prev + 1);
-  };
+const handleSendOpcoQuestionnaire = () => {
+  sendEventToBackend('Questionnaire OPCO envoyé');
+  setOpcoQuestionnaireSent(prev => prev + 1);
+  window.location.href = `http://localhost:5173/admin/survey-list?id_session=${formation.id_session}`;
+};
 
   const handleSendEmail = () => {
     setIsEmailPreviewOpen(true);
@@ -285,11 +303,8 @@ const ActionsPopup: React.FC<{
   };
 
   const handleGenerateConventions = () => {
-    // Envoyer l'événement au backend
     sendEventToBackend('Conventions générées');
     setConventionsGenerated(prev => prev + 1);
-
-    // Rediriger vers l'URL avec l'ID de session en tant que paramètre
     window.location.href = `http://localhost:5173/admin/documents?id_session=${formation.id_session}`;
   };
 
@@ -312,7 +327,6 @@ const ActionsPopup: React.FC<{
         },
       });
 
-      // Send event to backend with participant details
       sendEventToBackend('Participants enregistrés', {
         nom: formData.nom_stagiaire,
         prenom: formData.prenom_stagiaire,
@@ -322,7 +336,6 @@ const ActionsPopup: React.FC<{
       setParticipantsRegistered(prev => prev + 1);
       setIsAddTraineeModalOpen(false);
 
-      // Réinitialiser formData
       setFormData({
         nom_stagiaire: '',
         prenom_stagiaire: '',
@@ -365,7 +378,7 @@ const ActionsPopup: React.FC<{
           </div>
           <div>
             <button onClick={handleGenerateConventions} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
-              Générer les Conventions
+              Générer les conventions
             </button>
             <div className="text-sm text-gray-500 mt-2">
               <p>Conventions générées : {conventionsGenerated}</p>
@@ -374,7 +387,7 @@ const ActionsPopup: React.FC<{
           </div>
           <div>
             <button onClick={handleSendEmail} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
-              Envoyer Email
+              Envoyer email
             </button>
             <div className="text-sm text-gray-500 mt-2">
               <p>Emails envoyés : {emailsSent}</p>
@@ -393,7 +406,7 @@ const ActionsPopup: React.FC<{
           </div>
           <div>
             <button onClick={handleSendQuizz} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
-              Envoyer Quiz
+              Envoyer quiz
             </button>
             <div className="text-sm text-gray-500 mt-2">
               <p>Quiz envoyés : {quizzSent}</p>
@@ -411,6 +424,26 @@ const ActionsPopup: React.FC<{
               <p>Réponses à l'enquête de satisfaction : {satisfactionResponses}</p>
               <p>Taux de réponse : {calculateResponseRate(satisfactionResponses, formation.enrolledCount)}</p>
               {eventDates['Enquête de satisfaction envoyée'] && <p>Dernière date : {eventDates['Enquête de satisfaction envoyée']}</p>}
+            </div>
+          </div>
+          <div>
+            <button onClick={handleSendOpcoQuestionnaire} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
+              Envoyer questionnaire OPCO
+            </button>
+            <div className="text-sm text-gray-500 mt-2">
+              <p>Questionnaires OPCO envoyés : {opcoQuestionnaireSent}</p>
+              <p>Réponses au questionnaire OPCO : {opcoQuestionnaireResponses}</p>
+              <p>Taux de réponse : {calculateResponseRate(opcoQuestionnaireResponses, formation.enrolledCount)}</p>
+              {eventDates['Questionnaire OPCO envoyé'] && <p>Dernière date : {eventDates['Questionnaire OPCO envoyé']}</p>}
+            </div>
+          </div>
+          <div>
+            <button onClick={handleSendCertificate} className="w-full bg-blue-400 text-white py-2 rounded-md hover:bg-blue-500 transition">
+              Envoyer attestation de fin de formation
+            </button>
+            <div className="text-sm text-gray-500 mt-2">
+              <p>Attestations de fin de formation envoyées : {certificatesSent}</p>
+              {eventDates['Attestation de fin de formation envoyée'] && <p>Dernière date : {eventDates['Attestation de fin de formation envoyée']}</p>}
             </div>
           </div>
           <div>
