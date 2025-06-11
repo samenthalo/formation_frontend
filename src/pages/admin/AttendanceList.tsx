@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Filter, Calendar, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface Attendance {
   id: string;
@@ -24,6 +25,7 @@ const AttendanceList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSession, setSelectedSession] = useState('all');
+  const navigate = useNavigate();
 
   // Example attendance data
   const attendances: Attendance[] = [
@@ -62,6 +64,10 @@ const AttendanceList = () => {
     }
   ];
 
+  const handleGenerateAttendanceSheet = () => {
+    navigate('/admin/attendance-sheet');
+  };
+
   const getStatusIcon = (status: 'present' | 'absent' | 'late') => {
     switch (status) {
       case 'present':
@@ -99,6 +105,13 @@ const AttendanceList = () => {
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Suivi des présences</h1>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={handleGenerateAttendanceSheet}
+        >
+          Générer fiche de présence
+        </button>
       </div>
 
       <div className="bg-white rounded-lg shadow-md">

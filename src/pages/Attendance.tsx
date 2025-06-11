@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Calendar, Clock, MapPin, Users, CheckCircle, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Attendance = () => {
   const [selectedMonth, setSelectedMonth] = useState('Mars 2024');
+  const navigate = useNavigate();
 
   const sessions = [
     {
@@ -34,19 +36,31 @@ const Attendance = () => {
     },
   ];
 
+  const handleGenerateAttendanceSheet = () => {
+    navigate('/attendance-sheet');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Suivi de Présence</h1>
-        <select
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          className="input-field"
-        >
-          <option>Mars 2024</option>
-          <option>Février 2024</option>
-          <option>Janvier 2024</option>
-        </select>
+        <div className="flex items-center space-x-4">
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="input-field"
+          >
+            <option>Mars 2024</option>
+            <option>Février 2024</option>
+            <option>Janvier 2024</option>
+          </select>
+          <button
+            onClick={handleGenerateAttendanceSheet}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Générer Fiche de Présence
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
