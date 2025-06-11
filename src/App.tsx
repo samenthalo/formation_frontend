@@ -40,6 +40,9 @@ import Certificates from './pages/Certificates';
 import Quiz from './pages/Quiz';
 import Survey from './pages/Survey';
 
+// Import the new AttendanceSheet component
+import AttendanceSheet from './pages/admin/AttendanceSheet';
+
 // Temporary mock authentication state
 const userRole = 'admin'; // 'admin' | 'instructor' | 'trainee' | null
 
@@ -47,7 +50,7 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-background">
-        <ToastContainer /> {/* Ajoutez le ToastContainer ici */}
+        <ToastContainer />
         {userRole ? (
           <>
             <Navbar />
@@ -55,25 +58,27 @@ function App() {
               <Sidebar userRole={userRole} />
               <main className="flex-1 p-8">
                 <Routes>
-                  {userRole === 'admin' && (
-                    <>
-                      <Route path="/" element={<AdminDashboard />} />
-                      <Route path="/admin/calendar" element={<Calendar />} />
-                      <Route path="/admin/trainees" element={<TraineeList />} />
-                      <Route path="/admin/formations" element={<FormationList />} />
-                      <Route path="/admin/formations/new" element={<SessionForm />} />
-                      <Route path="/admin/instructors" element={<InstructorList />} />
-                      <Route path="/admin/attendance" element={<AttendanceList />} />
-                      <Route path="/admin/quiz-list" element={<QuizList />} />
-                      <Route path="/admin/quiz" element={<QuizCreator />} />
-                      <Route path="/admin/survey-list" element={<SurveyList />} />
-                      <Route path="/admin/sessions/new" element={<SessionForm />} />
-                      <Route path="/admin/survey" element={<SurveyCreator />} />
-                      <Route path="/admin/documents" element={<DocumentGenerator />} />
-                      <Route path="/catalog" element={<Catalog />} />
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </>
-                  )}
+                 {userRole === 'admin' && (
+                  <>
+                    <Route path="/" element={<AdminDashboard />} />
+                    <Route path="/admin/calendar" element={<Calendar />} />
+                    <Route path="/admin/trainees" element={<TraineeList />} />
+                    <Route path="/admin/formations" element={<FormationList />} />
+                    <Route path="/admin/formations/new" element={<SessionForm />} />
+                    <Route path="/admin/instructors" element={<InstructorList />} />
+                    <Route path="/admin/attendance" element={<AttendanceList />} />
+                    <Route path="/admin/quiz-list" element={<QuizList />} />
+                    <Route path="/admin/quiz" element={<QuizCreator />} />
+                    <Route path="/admin/survey-list" element={<SurveyList />} />
+                    <Route path="/admin/sessions/new" element={<SessionForm />} />
+                    <Route path="/admin/survey" element={<SurveyCreator />} />
+                    <Route path="/admin/documents" element={<DocumentGenerator />} />
+                    <Route path="/catalog" element={<Catalog />} />
+                    <Route path="/admin/attendance-sheet" element={<AttendanceSheet />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </>
+                )}
+
 
                   {userRole === 'instructor' && (
                     <>
@@ -82,6 +87,7 @@ function App() {
                       <Route path="/instructor/results" element={<ResultsTracker />} />
                       <Route path="/instructor/feedback" element={<FeedbackCenter />} />
                       <Route path="/catalog" element={<Catalog />} />
+                      <Route path="/attendance-sheet" element={<AttendanceSheet />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </>
                   )}
@@ -97,6 +103,7 @@ function App() {
                       <Route path="/certificates" element={<Certificates />} />
                       <Route path="/quiz/:id" element={<Quiz />} />
                       <Route path="/survey/:id" element={<Survey />} />
+                      <Route path="/attendance-sheet" element={<AttendanceSheet />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </>
                   )}
