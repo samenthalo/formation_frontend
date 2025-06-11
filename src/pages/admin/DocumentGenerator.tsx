@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
-import { FileText, Download, Send, X, CheckCircle, RefreshCw, Save } from 'lucide-react';
+import { FileText, Download, Send, X, CheckCircle, Save, ArrowLeft } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import axios from 'axios';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import AttestationFormation from './AttestationFormation';
+import ExistingDocuments from './ExistingDocuments';
 
 interface Participant {
   nom: string;
@@ -41,115 +40,13 @@ const calculateDuration = (datesSessions: DateSession[]) => {
   return uniqueDays.size;
 };
 
-const generateTemplateWithVariables = () => {
-  return `<h1>Template de Convention de Formation</h1>
-<p>Ceci est un template pour une convention de formation.</p>
-<ul>
-  <li>L'organisme de formation : <strong>(nomOrganisme)</strong></li>
-  <li>Situé : <strong>(adresseOrganisme)</strong></li>
-  <li>Déclaration d'activité n° <strong>(declarationActivite)</strong>, Numéro SIRET : <strong>(siretOrganisme)</strong></li>
-  <li>Représenté par : <strong>(representantOrganisme)</strong></li>
-  <li>Et la société bénéficiaire : <strong>(nomSocieteBeneficiaire)</strong></li>
-  <li>Située : <strong>(adresseSocieteBeneficiaire)</strong></li>
-  <li>Numéro SIRET : <strong>(siretSocieteBeneficiaire)</strong></li>
-  <li>Représentée par : <strong>(representantSocieteBeneficiaire)</strong></li>
-</ul>
-<p>En exécution de la présente convention, l'organisme de formation s'engage à mettre en œuvre à l'attention des employés de l’entreprise (nomSocieteBeneficiaire) un programme de formation, d'accompagnement et de maîtrise de la solution (nomFormation).</p>
-<p>L'action de formation entre dans l'une des catégories prévues à l'article L6313-1 du code du travail. À savoir celle figurant à l'alinéa 2° : «Les actions d'adaptation et de développement des compétences des salariés. Elles ont pour objet de favoriser l'adaptation des salariés à leur poste de travail, à l'évolution des emplois, ainsi que leur maintien dans l'emploi, et de participer au développement des compétences des salariés »</p>
-<h3>Session de formation</h3>
-<p>Type d'action de formation (art. L6313-1 du code du travail): <strong>(typeActionFormation)</strong>.</p>
-<p>(modaliteFormation)</p>
-<table>
-  <thead>
-    <tr>
-      <th>Date</th>
-      <th>Intitulé de la formation</th>
-      <th>Durée (heures)</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>(jour_0)</td>
-      <td>Formation (nomFormation)</td>
-      <td><strong>(duree_0)</strong></td>
-    </tr>
-  </tbody>
-</table>
-<h2>2. Programme de la formation</h2>
-<p>La description détaillée du programme de formation est fournie en annexe.</p>
-<h2>3. Engagement de participation à l'action de formation</h2>
-<p>Le bénéficiaire s'engage à assurer la présence des salariés de l'entreprise (nomSocieteBeneficiaire) aux dates prévues ci-dessus.</p>
-<p>Liste des participants à la formation (nomFormation)</p>
-<table>
-  <thead>
-    <tr>
-      <th>Nom & Prénom du participant</th>
-      <th>Email</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><strong>(nom_0) (prenom_0)</strong></td>
-      <td><strong>(email_0)</strong></td>
-    </tr>
-  </tbody>
-</table>
-<h2>4. Prix de la formation</h2>
-<p>En contrepartie de cette action de formation, le bénéficiaire (ou le financeur dans le cadre d'une subrogation de paiement) s'acquittera des coûts suivants qui couvrent l'intégralité des frais engagés par l'organisme de formation pour cette session :</p>
-<table>
-  <thead>
-    <tr>
-      <th>Description</th>
-      <th>Prix HT</th>
-      <th>Durée (jours)</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Formation (nomFormation)</td>
-      <td><strong>(prixFormation)</strong></td>
-      <td><strong>(dureeFormation)</strong></td>
-    </tr>
-  </tbody>
-</table>
-<h2>5. Modalités de règlement</h2>
-<p>Le paiement sera dû en totalité à réception d'une facture émise par l'organisme de formation à destination du bénéficiaire. Paiement par virement bancaire ou par chèque.</p>
-<h2>6. Moyens pédagogiques et techniques mis en œuvre</h2>
-<p>Pour les temps d’animation, un formateur encadre et assure l’apprentissage. Le programme de formation décrit les moyens mis en œuvre pour réaliser techniquement l'action, suivre son exécution et apprécier ses résultats.</p>
-<p>Cette formation est accessible aux personnes en situation de handicap. Vivasoft mettra en place des solutions et des moyens organisationnels techniques et humains pour permettre à toute personne en situation de handicap de bénéficier de la formation. Une assistance avec prise en main du logiciel à distance est mise en place si nécessaire.</p>
-<h2>7. Moyens permettant d'apprécier les résultats de l'action</h2>
-<p>
-  ● En amont de la formation :<br/>
-  ➔ Recueil des attentes et des objectifs des participants.<br/>
-  ● A la fin de la formation<br/>
-  ➔ Une enquête interroge le niveau de satisfaction par rapport au déroulement de la formation.<br/>
-  ➔ Le responsable pédagogique effectue un test au moyen d’un quiz pour évaluer les compétences et les progrès des participants autour de (nomFormation).
-</p>
-<h2>8. Non réalisation de la prestation de formation</h2>
-<p>En application de l’article L6354-1 du Code du travail, il est convenu entre les signataires de la présente convention, qu’en cas de résiliation de la présente convention par le bénéficiaire ou en cas d'abandon en cours de formation, l’organisme de formation facturera les sommes qu’il aura réellement dépensées ou engagées pour la préparation et/ou la réalisation de l’action de formation.</p>
-<p>En application de l’article L.6354-1 du Code du travail, il est convenu entre les signataires de la présente convention, que faute de réalisation totale ou partielle de la prestation de formation, l’organisme prestataire doit rembourser au cocontractant les sommes indûment perçues de ce fait.</p>
-<h2>9. Dédommagement, réparation ou dédit</h2>
-<p>En cas de renoncement par le bénéficiaire avant le début du programme de formation</p>
-<ul>
-  <li>Dans un délai supérieur à 1 mois avant le début de la formation : 50% du coût de la formation est dû.</li>
-  <li>Dans un délai compris entre 1 mois et 2 semaines avant le début de la formation : 70 % du coût de la formation est dû.</li>
-  <li>Dans un délai inférieur à 2 semaines avant le début de la formation : 100 % du coût de la formation est dû.</li>
-  <li>Le coût ne pourra faire l’objet d’une demande de remboursement ou de prise en charge par l'OPCA.</li>
-</ul>
-<h2>10. Litiges</h2>
-<p>Si une contestation ou un différend s’élève à l’occasion de l’exécution de la convention, la partie insatisfaite adressera à l’autre partie un courrier recommandé avec A/R décrivant les difficultés rencontrées. À compter de la réception de ce courrier, l’autre partie à la convention aura un délai de 15 jours pour répondre par recommandé avec A/R. En l’absence de réponse ou en cas de désaccord persistant, chaque partie pourra saisir le juge compétent.</p>
-<h2>11. Annexes</h2>
-<p>Sont annexés à cette convention :</p>
-<ul>
-  <li>Un programme de la formation</li>
-</ul>
-<p>Document réalisé en 2 exemplaires à Marssac-sur-Tarn, le (dateLieu)</p>
-<p>Pour l'organisme de formation :</p>
-<p><strong>(nomOrganisme)</strong></p>
-<p><strong>(representantOrganisme)</strong></p>
-<p>Pour la société bénéficiaire</p>
-<p><strong>(nomSocieteBeneficiaire)</strong></p>
-<p><strong>(representantSocieteBeneficiaire)</strong></p>`;
+const generateRandomString = (length: number) => {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
 };
 
 const DocumentGenerator = () => {
@@ -180,9 +77,7 @@ const DocumentGenerator = () => {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
-  const [editorHtml, setEditorHtml] = useState('');
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [idSessionFormation, setIdSessionFormation] = useState<string | null>(null);
   const [emailDetails, setEmailDetails] = useState({
@@ -190,30 +85,36 @@ const DocumentGenerator = () => {
     subject: '',
     message: '',
   });
+  const [viewMode, setViewMode] = useState<'generator' | 'documents'>('generator');
 
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const idSession = queryParams.get('id_session');
     setIdSessionFormation(idSession);
 
-    const fetchPrefillData = async () => {
-      try {
-        const response = await axios.get(`http://localhost:8000/convention/prefill/${idSession}`);
-        const data = response.data;
+const fetchPrefillData = async () => {
+  try {
+    const response = await axios.get(`http://localhost:8000/convention/prefill/${idSession}`);
+    const data = response.data;
 
-        setCustomFields(prevState => ({
-          ...prevState,
-          nomFormation: data.titreFormation || '',
-          dureeFormation: data.dureeHeures || '',
-          dateLieu: data.lieuSession || today,
-          participants: data.participants || [],
-          datesSessions: data.creneaux || [],
-          prixFormation: data.prixFormation || '',
-        }));
-      } catch (error) {
-        console.error('Erreur lors de la récupération des données de préremplissage:', error);
-      }
-    };
+    setCustomFields(prevState => ({
+      ...prevState,
+      nomFormation: data.titreFormation || '',
+      dureeFormation: data.dureeHeures || '',
+      dateLieu: data.lieuSession || today,
+      participants: data.participants || [],
+      datesSessions: data.creneaux || [],
+      prixFormation: data.prixFormation || '',
+    }));
+  } catch (error) {
+    console.error('Error fetching prefill data:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('Response data:', error.response?.data);
+      console.error('Response status:', error.response?.status);
+      console.error('Response headers:', error.response?.headers);
+    }
+  }
+};
 
     if (idSession) {
       fetchPrefillData();
@@ -226,14 +127,12 @@ const DocumentGenerator = () => {
       name: 'Convention de formation',
       description: 'Document officiel établissant les termes de la formation',
       icon: FileText,
-      template: `<h1>Template de Convention de Formation</h1><p>Ceci est un template pour une convention de formation.</p>`
     },
     {
       id: 'attestation',
       name: 'Attestation de fin de formation',
       description: 'Certificat de réussite pour les participants',
       icon: FileText,
-      template: `<h1>Template d'Attestation de Formation</h1><p>Ceci est un template pour une attestation de formation.</p>`
     },
   ];
 
@@ -242,33 +141,31 @@ const DocumentGenerator = () => {
     setIsGenerating(true);
 
     try {
-      const response = await axios.post(`http://localhost:8000/convention/create/${idSessionFormation}`, customFields);
-
-      if (response.status === 201) {
-        toast.success('Document généré et enregistré avec succès!');
-        setShowEmailModal(true);
-        setCustomFields({
-          nomOrganisme: 'VIVASOFT',
-          adresseOrganisme: '13 AVENUE DE LA PELATIE 81150 MARSSAC-SUR-TARN',
-          declarationActivite: '76810170881',
-          siretOrganisme: '80511483200027',
-          representantOrganisme: 'M. Christian Pompier',
-          nomSocieteBeneficiaire: '',
-          adresseSocieteBeneficiaire: '',
-          siretSocieteBeneficiaire: '',
-          representantSocieteBeneficiaire: '',
-          dureeFormation: '',
-          typeActionFormation: '',
-          modaliteFormation: 'présentiel',
-          programmeFormation: '',
-          participants: [],
-          prixFormation: '',
-          modalitesReglement: '',
-          dateLieu: today,
-          nomFormation: '',
-          datesSessions: [],
-        });
-      }
+      await generatePDF();
+      toast.success('Document généré et sauvegardé avec succès !');
+      await handleSaveAndDownload();
+      setShowEmailModal(true);
+      setCustomFields({
+        nomOrganisme: 'VIVASOFT',
+        adresseOrganisme: '13 AVENUE DE LA PELATIE 81150 MARSSAC-SUR-TARN',
+        declarationActivite: '76810170881',
+        siretOrganisme: '80511483200027',
+        representantOrganisme: 'M. Christian Pompier',
+        nomSocieteBeneficiaire: '',
+        adresseSocieteBeneficiaire: '',
+        siretSocieteBeneficiaire: '',
+        representantSocieteBeneficiaire: '',
+        dureeFormation: '',
+        typeActionFormation: '',
+        modaliteFormation: 'présentiel',
+        programmeFormation: '',
+        participants: [],
+        prixFormation: '',
+        modalitesReglement: '',
+        dateLieu: today,
+        nomFormation: '',
+        datesSessions: [],
+      });
     } catch (error) {
       console.error('Erreur lors de la génération:', error);
       toast.error('Erreur lors de la génération du document.');
@@ -277,18 +174,38 @@ const DocumentGenerator = () => {
     }
   };
 
-  const handleSave = async () => {
-    try {
-      const response = await axios.post(`http://localhost:8000/convention/create/${idSessionFormation}`, customFields);
+const generateFileName = () => {
+  const { nomSocieteBeneficiaire, nomFormation, dateLieu } = customFields;
+  const formattedDate = formatDate(dateLieu).replace(/\//g, '-');
+  return `Convention_${nomSocieteBeneficiaire}_${nomFormation}_${formattedDate}.pdf`;
+};
 
-      if (response.status === 201) {
-        toast.success('Document sauvegardé avec succès!');
-      }
+const handleSaveAndDownload = async () => {
+  const pdfBlob = await generatePDF();
+  if (pdfBlob) {
+    const fileName = generateFileName(); // Générer le nom de fichier significatif
+
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    const link = document.createElement('a');
+    link.href = pdfUrl;
+    link.download = fileName; // Utiliser le nom de fichier significatif pour le téléchargement
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    const formData = new FormData();
+    formData.append('file', pdfBlob, fileName); // Utiliser le même nom de fichier pour l'envoi au serveur
+    formData.append('sessionId', idSessionFormation || '');
+
+    try {
+      await uploadPDF(formData);
+      toast.success('Document téléchargé et sauvegardé avec succès!');
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error);
+      console.error('Error uploading PDF:', error);
       toast.error('Erreur lors de la sauvegarde du document.');
     }
-  };
+  }
+};
 
   const handleSendEmail = async () => {
     try {
@@ -388,6 +305,9 @@ const DocumentGenerator = () => {
         const pdfBlob = pdf.output('blob');
         const pdfUrl = URL.createObjectURL(pdfBlob);
         setPdfUrl(pdfUrl);
+
+        return pdfBlob;
+
       } catch (error) {
         console.error('Error generating PDF:', error);
       } finally {
@@ -398,475 +318,514 @@ const DocumentGenerator = () => {
     }
   };
 
+  const uploadPDF = async (formData: FormData) => {
+    try {
+      const response = await axios.post('http://localhost:8000/convention/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.message) {
+        toast.success(response.data.message);
+      }
+    } catch (error) {
+      console.error('Error uploading PDF:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+        console.error('Response headers:', error.response.headers);
+      }
+      toast.error('Erreur lors de l\'upload du PDF.');
+    }
+  };
+
   const selectedDocumentType = documentTypes.find(type => type.id === selectedType);
 
   return (
     <div className="space-y-6">
-      <ToastContainer />
-      <h1 className="text-3xl font-bold">Générateur de Documents</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {documentTypes.map((type) => (
-          <div
-            key={type.id}
-            className={`bg-white rounded-lg shadow-md p-6 cursor-pointer transition-all ${
-              selectedType === type.id ? 'ring-2 ring-primary' : 'hover:shadow-lg'
-            }`}
-            onClick={() => setSelectedType(type.id)}
-          >
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-primary bg-opacity-10 rounded-full">
-                <type.icon className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h3 className="text-lg font-medium">{type.name}</h3>
-                <p className="text-sm text-gray-600">{type.description}</p>
-              </div>
-            </div>
+      {viewMode === 'generator' ? (
+        <>
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold">Générateur de Documents</h1>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setViewMode('documents')}
+            >
+              Voir les Documents Existants
+            </button>
           </div>
-        ))}
-      </div>
 
-      {selectedType === 'attestation' && (
-        <AttestationFormation
-          customFields={customFields}
-          setCustomFields={setCustomFields}
-          handleSubmit={handleSubmit}
-          isGenerating={isGenerating}
-        />
-      )}
-
-      {selectedType === 'convention' && (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nom de l'organisme de formation
-                </label>
-                <input
-                  type="text"
-                  value={customFields.nomOrganisme}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, nomOrganisme: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Nom de l'organisme de formation"
-                  required
-                />
+          <ToastContainer />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {documentTypes.map((type) => (
+              <div
+                key={type.id}
+                className={`bg-white rounded-lg shadow-md p-6 cursor-pointer transition-all ${
+                  selectedType === type.id ? 'ring-2 ring-primary' : 'hover:shadow-lg'
+                }`}
+                onClick={() => setSelectedType(type.id)}
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-primary bg-opacity-10 rounded-full">
+                    <type.icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium">{type.name}</h3>
+                    <p className="text-sm text-gray-600">{type.description}</p>
+                  </div>
+                </div>
               </div>
+            ))}
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Adresse de l'organisme de formation
-                </label>
-                <input
-                  type="text"
-                  value={customFields.adresseOrganisme}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, adresseOrganisme: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Adresse de l'organisme de formation"
-                  required
-                />
-              </div>
+          {selectedType === 'attestation' && (
+            <AttestationFormation
+              customFields={customFields}
+              setCustomFields={setCustomFields}
+              handleSubmit={handleSubmit}
+              isGenerating={isGenerating}
+            />
+          )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Déclaration d'activité
-                </label>
-                <input
-                  type="text"
-                  value={customFields.declarationActivite}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, declarationActivite: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Déclaration d'activité"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Numéro SIRET de l'organisme de formation
-                </label>
-                <input
-                  type="text"
-                  value={customFields.siretOrganisme}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, siretOrganisme: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Numéro SIRET de l'organisme de formation"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Représentant de l'organisme de formation
-                </label>
-                <input
-                  type="text"
-                  value={customFields.representantOrganisme}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, representantOrganisme: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Représentant de l'organisme de formation"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nom de la société bénéficiaire
-                </label>
-                <input
-                  type="text"
-                  value={customFields.nomSocieteBeneficiaire}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, nomSocieteBeneficiaire: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Nom de la société bénéficiaire"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Adresse de la société bénéficiaire
-                </label>
-                <input
-                  type="text"
-                  value={customFields.adresseSocieteBeneficiaire}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, adresseSocieteBeneficiaire: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Adresse de la société bénéficiaire"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Numéro SIRET de la société bénéficiaire
-                </label>
-                <input
-                  type="text"
-                  value={customFields.siretSocieteBeneficiaire}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, siretSocieteBeneficiaire: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Numéro SIRET de la société bénéficiaire"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Représentant de la société bénéficiaire
-                </label>
-                <input
-                  type="text"
-                  value={customFields.representantSocieteBeneficiaire}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, representantSocieteBeneficiaire: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Représentant de la société bénéficiaire"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nom de la formation
-                </label>
-                <input
-                  type="text"
-                  value={customFields.nomFormation}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, nomFormation: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Nom de la formation"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Durée de la formation
-                </label>
-                <input
-                  type="text"
-                  value={customFields.dureeFormation}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, dureeFormation: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Durée de la formation"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Type d'action de formation
-                </label>
-                <input
-                  type="text"
-                  value={customFields.typeActionFormation}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, typeActionFormation: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Type d'action de formation"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Modalité de formation
-                </label>
-                <select
-                  value={customFields.modaliteFormation}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, modaliteFormation: e.target.value })
-                  }
-                  className="input-field"
-                  required
-                >
-                  <option value="présentiel">Présentiel</option>
-                  <option value="distanciel">Distanciel</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Créneaux
-              </label>
-              {customFields.datesSessions.map((session, index) => (
-                <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {selectedType === 'convention' && (
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Date
+                      Nom de l'organisme de formation
                     </label>
                     <input
-                      type="date"
-                      value={session.jour}
-                      onChange={(e) => handleDateSessionChange(index, 'jour', e.target.value)}
+                      type="text"
+                      value={customFields.nomOrganisme}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, nomOrganisme: e.target.value })
+                      }
                       className="input-field"
+                      placeholder="Nom de l'organisme de formation"
                       required
                     />
                   </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Heure de début
+                      Adresse de l'organisme de formation
                     </label>
                     <input
-                      type="time"
-                      value={session.heureDebut}
-                      onChange={(e) => handleDateSessionChange(index, 'heureDebut', e.target.value)}
+                      type="text"
+                      value={customFields.adresseOrganisme}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, adresseOrganisme: e.target.value })
+                      }
                       className="input-field"
+                      placeholder="Adresse de l'organisme de formation"
                       required
                     />
                   </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Heure de fin
+                      Déclaration d'activité
                     </label>
                     <input
-                      type="time"
-                      value={session.heureFin}
-                      onChange={(e) => handleDateSessionChange(index, 'heureFin', e.target.value)}
+                      type="text"
+                      value={customFields.declarationActivite}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, declarationActivite: e.target.value })
+                      }
                       className="input-field"
+                      placeholder="Déclaration d'activité"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Numéro SIRET de l'organisme de formation
+                    </label>
+                    <input
+                      type="text"
+                      value={customFields.siretOrganisme}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, siretOrganisme: e.target.value })
+                      }
+                      className="input-field"
+                      placeholder="Numéro SIRET de l'organisme de formation"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Représentant de l'organisme de formation
+                    </label>
+                    <input
+                      type="text"
+                      value={customFields.representantOrganisme}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, representantOrganisme: e.target.value })
+                      }
+                      className="input-field"
+                      placeholder="Représentant de l'organisme de formation"
                       required
                     />
                   </div>
                 </div>
-              ))}
-              <button
-                type="button"
-                className="btn-secondary mt-2"
-                onClick={handleAddDateSession}
-              >
-                Ajouter un créneau
-              </button>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Participants
-              </label>
-              {customFields.participants.map((participant, index) => (
-                <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nom du participant
+                      Nom de la société bénéficiaire
                     </label>
                     <input
                       type="text"
-                      value={participant.nom}
-                      onChange={(e) => handleParticipantChange(index, 'nom', e.target.value)}
+                      value={customFields.nomSocieteBeneficiaire}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, nomSocieteBeneficiaire: e.target.value })
+                      }
                       className="input-field"
-                      placeholder="Nom du participant"
+                      placeholder="Nom de la société bénéficiaire"
                       required
                     />
                   </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Prénom du participant
+                      Adresse de la société bénéficiaire
                     </label>
                     <input
                       type="text"
-                      value={participant.prenom}
-                      onChange={(e) => handleParticipantChange(index, 'prenom', e.target.value)}
+                      value={customFields.adresseSocieteBeneficiaire}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, adresseSocieteBeneficiaire: e.target.value })
+                      }
                       className="input-field"
-                      placeholder="Prénom du participant"
+                      placeholder="Adresse de la société bénéficiaire"
                       required
                     />
                   </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
+                      Numéro SIRET de la société bénéficiaire
                     </label>
                     <input
-                      type="email"
-                      value={participant.email}
-                      onChange={(e) => handleParticipantChange(index, 'email', e.target.value)}
+                      type="text"
+                      value={customFields.siretSocieteBeneficiaire}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, siretSocieteBeneficiaire: e.target.value })
+                      }
                       className="input-field"
-                      placeholder="Email"
+                      placeholder="Numéro SIRET de la société bénéficiaire"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Représentant de la société bénéficiaire
+                    </label>
+                    <input
+                      type="text"
+                      value={customFields.representantSocieteBeneficiaire}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, representantSocieteBeneficiaire: e.target.value })
+                      }
+                      className="input-field"
+                      placeholder="Représentant de la société bénéficiaire"
                       required
                     />
                   </div>
                 </div>
-              ))}
-              <button
-                type="button"
-                className="btn-secondary mt-2"
-                onClick={handleAddParticipant}
-              >
-                Ajouter un participant
-              </button>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Prix de la formation
-                </label>
-                <input
-                  type="text"
-                  value={customFields.prixFormation}
-                  onChange={(e) =>
-                    setCustomFields({ ...customFields, prixFormation: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="Prix de la formation"
-                  required
-                />
-              </div>
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nom de la formation
+                    </label>
+                    <input
+                      type="text"
+                      value={customFields.nomFormation}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, nomFormation: e.target.value })
+                      }
+                      className="input-field"
+                      placeholder="Nom de la formation"
+                      required
+                    />
+                  </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Date
-              </label>
-              <input
-                type="date"
-                value={customFields.dateLieu}
-                onChange={(e) =>
-                  setCustomFields({ ...customFields, dateLieu: e.target.value })
-                }
-                className="input-field"
-                required
-              />
-            </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Durée de la formation
+                    </label>
+                    <input
+                      type="text"
+                      value={customFields.dureeFormation}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, dureeFormation: e.target.value })
+                      }
+                      className="input-field"
+                      placeholder="Durée de la formation"
+                      required
+                    />
+                  </div>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Programme de formation
-              </label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
-                <div className="space-y-1 text-center">
-                  <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="flex text-sm text-gray-600">
-                    <label
-                      htmlFor="programmeFormation"
-                      className="relative cursor-pointer bg-white rounded-md font-medium text-primary hover:text-primary/90"
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Type d'action de formation
+                    </label>
+                    <input
+                      type="text"
+                      value={customFields.typeActionFormation}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, typeActionFormation: e.target.value })
+                      }
+                      className="input-field"
+                      placeholder="Type d'action de formation"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Modalité de formation
+                    </label>
+                    <select
+                      value={customFields.modaliteFormation}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, modaliteFormation: e.target.value })
+                      }
+                      className="input-field"
+                      required
                     >
-                      <span>Téléverser un fichier</span>
-                      <input
-                        id="programmeFormation"
-                        name="programmeFormation"
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        className="sr-only"
-                        onChange={handleFileChange}
-                        required
-                      />
-                    </label>
-                    <p className="pl-1">ou glisser-déposer</p>
+                      <option value="présentiel">Présentiel</option>
+                      <option value="distanciel">Distanciel</option>
+                    </select>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    PDF, DOC jusqu'à 10MB
-                  </p>
                 </div>
-              </div>
-              {customFields.programmeFormation && (
-                <p className="mt-2 text-sm text-gray-600">
-                  Fichier sélectionné : {customFields.programmeFormation}
-                </p>
-              )}
-            </div>
 
-            <div className="flex justify-end space-x-4">
-              <button
-                type="button"
-                className="btn-secondary flex items-center space-x-2"
-                onClick={() => {
-                  setEditorHtml(generateTemplateWithVariables());
-                  setShowTemplateModal(true);
-                }}
-              >
-                <RefreshCw className="h-4 w-4" />
-                <span>Voir le template</span>
-              </button>
-              <button
-                type="button"
-                className="btn-secondary flex items-center space-x-2"
-                onClick={generatePDF}
-              >
-                <Download className="h-4 w-4" />
-                <span>Prévisualisation PDF</span>
-              </button>
-              <button
-                type="submit"
-                className="btn-primary flex items-center space-x-2"
-                disabled={isGenerating}
-              >
-                <Send className="h-4 w-4" />
-                <span>
-                  {isGenerating ? 'Génération en cours...' : 'Générer et envoyer'}
-                </span>
-              </button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Créneaux
+                  </label>
+                  {customFields.datesSessions.map((session, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Date
+                        </label>
+                        <input
+                          type="date"
+                          value={session.jour}
+                          onChange={(e) => handleDateSessionChange(index, 'jour', e.target.value)}
+                          className="input-field"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Heure de début
+                        </label>
+                        <input
+                          type="time"
+                          value={session.heureDebut}
+                          onChange={(e) => handleDateSessionChange(index, 'heureDebut', e.target.value)}
+                          className="input-field"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Heure de fin
+                        </label>
+                        <input
+                          type="time"
+                          value={session.heureFin}
+                          onChange={(e) => handleDateSessionChange(index, 'heureFin', e.target.value)}
+                          className="input-field"
+                          required
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn-secondary mt-2"
+                    onClick={handleAddDateSession}
+                  >
+                    Ajouter un créneau
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Participants
+                  </label>
+                  {customFields.participants.map((participant, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Nom du participant
+                        </label>
+                        <input
+                          type="text"
+                          value={participant.nom}
+                          onChange={(e) => handleParticipantChange(index, 'nom', e.target.value)}
+                          className="input-field"
+                          placeholder="Nom du participant"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Prénom du participant
+                        </label>
+                        <input
+                          type="text"
+                          value={participant.prenom}
+                          onChange={(e) => handleParticipantChange(index, 'prenom', e.target.value)}
+                          className="input-field"
+                          placeholder="Prénom du participant"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          value={participant.email}
+                          onChange={(e) => handleParticipantChange(index, 'email', e.target.value)}
+                          className="input-field"
+                          placeholder="Email"
+                          required
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn-secondary mt-2"
+                    onClick={handleAddParticipant}
+                  >
+                    Ajouter un participant
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Prix de la formation
+                    </label>
+                    <input
+                      type="text"
+                      value={customFields.prixFormation}
+                      onChange={(e) =>
+                        setCustomFields({ ...customFields, prixFormation: e.target.value })
+                      }
+                      className="input-field"
+                      placeholder="Prix de la formation"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={customFields.dateLieu}
+                    onChange={(e) =>
+                      setCustomFields({ ...customFields, dateLieu: e.target.value })
+                    }
+                    className="input-field"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Programme de formation
+                  </label>
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
+                    <div className="space-y-1 text-center">
+                      <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                      <div className="flex text-sm text-gray-600">
+                        <label
+                          htmlFor="programmeFormation"
+                          className="relative cursor-pointer bg-white rounded-md font-medium text-primary hover:text-primary/90"
+                        >
+                          <span>Téléverser un fichier</span>
+                          <input
+                            id="programmeFormation"
+                            name="programmeFormation"
+                            type="file"
+                            accept=".pdf,.doc,.docx"
+                            className="sr-only"
+                            onChange={handleFileChange}
+                            required
+                          />
+                        </label>
+                        <p className="pl-1">ou glisser-déposer</p>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        PDF, DOC jusqu'à 10MB
+                      </p>
+                    </div>
+                  </div>
+                  {customFields.programmeFormation && (
+                    <p className="mt-2 text-sm text-gray-600">
+                      Fichier sélectionné : {customFields.programmeFormation}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex justify-end space-x-4">
+                  <button
+                    type="button"
+                    className="btn-secondary flex items-center space-x-2"
+                    onClick={generatePDF}
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Prévisualisation PDF</span>
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary flex items-center space-x-2"
+                    disabled={isGenerating}
+                  >
+                    <Send className="h-4 w-4" />
+                    <span>
+                      {isGenerating ? 'Génération en cours...' : 'Générer et envoyer'}
+                    </span>
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          )}
+        </>
+      ) : (
+        <div>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">Documents Existants</h1>
+            <button
+              type="button"
+              className="btn-secondary flex items-center space-x-2"
+              onClick={() => setViewMode('generator')}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Retour au Générateur</span>
+            </button>
+          </div>
+          <ExistingDocuments />
         </div>
       )}
 
@@ -1046,68 +1005,13 @@ const DocumentGenerator = () => {
             title="PDF Preview"
           />
           <div className="mt-4 flex space-x-4">
-            <a href={pdfUrl} download="document.pdf" className="btn-primary">
-              Télécharger le PDF
-            </a>
             <button
               type="button"
               className="btn-primary"
-              onClick={handleSave}
+              onClick={handleSaveAndDownload}
             >
-              Sauvegarder la convention
+              Télécharger et Sauvegarder
             </button>
-          </div>
-        </div>
-      )}
-
-      {showTemplateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl h-5/6 flex flex-col">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Template de {selectedDocumentType?.name}
-                </h3>
-                <button
-                  type="button"
-                  className="text-gray-400 hover:text-gray-500"
-                  onClick={() => setShowTemplateModal(false)}
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              <div className="bg-gray-50 p-4 rounded-lg flex-grow overflow-y-auto">
-                <div className="h-full">
-                  <ReactQuill
-                    value={editorHtml}
-                    onChange={setEditorHtml}
-                    modules={{
-                      toolbar: [
-                        [{ 'header': [1, 2, false] }],
-                        ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-                        [{'list': 'ordered'}, {'list': 'bullet'}, {'indent': '-1'}, {'indent': '+1'}],
-                        ['link', 'image'],
-                        ['clean']
-                      ],
-                    }}
-                    className="h-full"
-                    style={{ height: '600px', width: '100%' }}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end space-x-4 mt-4">
-                <button
-                  type="button"
-                  className="btn-primary flex items-center space-x-2"
-                  onClick={() => {
-                    setShowTemplateModal(false);
-                  }}
-                >
-                  <Save className="h-4 w-4" />
-                  <span>Enregistrer les modifications</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
