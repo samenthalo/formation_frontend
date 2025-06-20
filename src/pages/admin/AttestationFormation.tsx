@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import JSZip from 'jszip';
-import { FileDown, FileArchive } from 'lucide-react';
+import { FileDown, FileArchive, Mail } from 'lucide-react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 const AttestationFormation = ({ isGenerating }) => {
   const [sessionId, setSessionId] = useState(null);
-
   const [commonFields, setCommonFields] = useState({
     nomRepresentant: 'Pompier',
     prenomRepresentant: 'Christian',
@@ -29,8 +28,14 @@ const AttestationFormation = ({ isGenerating }) => {
       nomBeneficiaire: '',
       prenomBeneficiaire: '',
       raisonSocialeEntreprise: '',
+      email: '',
     }
   ]);
+
+const [isModalOpen, setIsModalOpen] = useState(false);
+const [emailData, setEmailData] = useState({
+  message: 'Bonjour,\n\nVeuillez trouver ci-joint votre attestation de stage, délivrée dans le cadre de la formation que vous avez suivie au sein de notre entreprise, Vivasoft.',
+});
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -44,7 +49,11 @@ const AttestationFormation = ({ isGenerating }) => {
       const fetchSessionData = async () => {
         try {
           const response = await fetch(`http://localhost:8000/attestation/generer/${sessionIdFromUrl}`);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
           const data = await response.json();
+          console.log('Data received from API:', data);
 
           setCommonFields({
             ...commonFields,
@@ -54,11 +63,14 @@ const AttestationFormation = ({ isGenerating }) => {
             dateFin: data.creneaux[data.creneaux.length - 1]?.jour || '',
           });
 
-          setParticipants(data.participants.map(participant => ({
+          const participantsWithEmails = data.participants.map(participant => ({
             nomBeneficiaire: participant?.nom || '',
             prenomBeneficiaire: participant?.prenom || '',
             raisonSocialeEntreprise: participant?.entreprise || '',
-          })));
+            email: participant?.email || '',
+          }));
+          console.log('Participants with emails:', participantsWithEmails);
+          setParticipants(participantsWithEmails);
         } catch (error) {
           console.error('Error fetching session data:', error);
         }
@@ -275,7 +287,6 @@ const AttestationFormation = ({ isGenerating }) => {
     formData.append('file', blob, fileName);
     formData.append('sessionId', sessionId);
 
-    // Ajouter la date et l'heure actuelles
     const dateGeneration = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
     formData.append('dateGeneration', dateGeneration);
 
@@ -299,7 +310,6 @@ const AttestationFormation = ({ isGenerating }) => {
 
   const downloadAndUploadPdf = async (pdfBytes, fileName) => {
     await uploadPdfToServer(pdfBytes, fileName);
-    // Download locally
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const downloadUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -376,6 +386,68 @@ const AttestationFormation = ({ isGenerating }) => {
     const newParticipants = [...participants];
     newParticipants[index][field] = value;
     setParticipants(newParticipants);
+  };
+
+  const handleEmailFieldChange = (field, value) => {
+    setEmailData({ ...emailData, [field]: value });
+  };
+
+  const sendEmailWithAttachment = async (email, message, pdfBytes, fileName) => {
+    const formData = new FormData();
+    formData.append('email', email);
+    formData.append('message', message);
+
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    formData.append('attestation', blob, fileName);
+
+    try {
+      const response = await fetch('http://localhost:8000/envoyer-attestation', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${JSON.stringify(errorData)}`);
+      }
+
+      const data = await response.json();
+      console.log('Email sent successfully:', data);
+      toast.success('Email envoyé avec succès !');
+    } catch (error) {
+      console.error('Error sending email:', error);
+      toast.error('Erreur lors de l\'envoi de l\'email.');
+    }
+  };
+
+  const handleSendSingleEmail = async (participant) => {
+    if (!participant.email) {
+      console.error(`Email is missing for participant: ${participant.nomBeneficiaire} ${participant.prenomBeneficiaire}`);
+      toast.error('Email manquant pour ce participant.');
+      return;
+    }
+
+    const pdfBytes = await generatePdf(participant);
+    if (pdfBytes) {
+      const fileName = `${participant.nomBeneficiaire}_${participant.prenomBeneficiaire}_attestation.pdf`;
+      await sendEmailWithAttachment(participant.email, emailData.message, pdfBytes, fileName);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    for (const participant of participants) {
+      if (!participant.email) {
+        console.error(`Email is missing for participant: ${participant.nomBeneficiaire} ${participant.prenomBeneficiaire}`);
+        continue;
+      }
+
+      const pdfBytes = await generatePdf(participant);
+      if (pdfBytes) {
+        const fileName = `${participant.nomBeneficiaire}_${participant.prenomBeneficiaire}_attestation.pdf`;
+        await sendEmailWithAttachment(participant.email, emailData.message, pdfBytes, fileName);
+      }
+    }
+    setIsModalOpen(false);
   };
 
   return (
@@ -510,28 +582,94 @@ const AttestationFormation = ({ isGenerating }) => {
                   onChange={(e) => handleParticipantFieldChange(index, 'raisonSocialeEntreprise', e.target.value)}
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  type="email"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={participant.email}
+                  onChange={(e) => handleParticipantFieldChange(index, 'email', e.target.value)}
+                />
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => downloadSinglePdf(participant)}
-              className="mt-2 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#5ea8f2] hover:bg-[#4a90d9] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#5ea8f2]"
-            >
-              <FileDown className="mr-2 h-4 w-4" />
-              Télécharger l'attestation
-            </button>
+            <div className="flex space-x-4">
+              <button
+                type="button"
+                onClick={() => downloadSinglePdf(participant)}
+                className="mt-2 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#5ea8f2] hover:bg-[#4a90d9] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#5ea8f2]"
+              >
+                <FileDown className="mr-2 h-4 w-4" />
+                Télécharger l'attestation
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendSingleEmail(participant)}
+                className="mt-2 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#5ea8f2] hover:bg-[#4a90d9] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#5ea8f2]"
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Envoyer par email
+              </button>
+            </div>
           </div>
         ))}
 
-        <button
-          type="button"
-          onClick={generateAllPdfs}
-          disabled={isGenerating}
-          className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#5ea8f2] hover:bg-[#4a90d9] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#5ea8f2]"
-        >
-          <FileArchive className="mr-2 h-4 w-4" />
-          {isGenerating ? 'Génération en cours...' : 'Télécharger toutes les attestations'}
-        </button>
+        <div className="flex space-x-4">
+          <button
+            type="button"
+            onClick={generateAllPdfs}
+            disabled={isGenerating}
+            className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#5ea8f2] hover:bg-[#4a90d9] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#5ea8f2]"
+          >
+            <FileArchive className="mr-2 h-4 w-4" />
+            {isGenerating ? 'Génération en cours...' : 'Télécharger toutes les attestations'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#5ea8f2] hover:bg-[#4a90d9] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#5ea8f2]"
+          >
+          <Mail className="mr-2 h-4 w-4" />
+          Envoyer les attestations par mail à tous les participants
+          </button>
+        </div>
       </form>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3 text-center">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Envoyer par mail</h3>
+              <div className="mt-2 px-7 py-3">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Message</label>
+                  <textarea
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    value={emailData.message}
+                    onChange={(e) => handleEmailFieldChange('message', e.target.value)}
+                  />
+                </div>
+                <div className="items-center px-4 py-3">
+                  <button
+                    onClick={handleSendEmail}
+                    className="px-4 py-2 bg-[#5ea8f2] text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-[#4a90d9] focus:outline-none focus:ring-2 focus:ring-[#5ea8f2] focus:ring-offset-2"
+                  >
+                    Envoyer
+                  </button>
+                </div>
+                <div className="items-center px-4 py-3">
+                  <button
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ToastContainer />
     </div>
   );
