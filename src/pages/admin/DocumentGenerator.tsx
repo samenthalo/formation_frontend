@@ -7,6 +7,9 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import AttestationFormation from './AttestationFormation';
 import ExistingDocuments from './ExistingDocuments';
+import signature from '../../assets/signature.png';
+import logo from '../../assets/logo.png';
+
 
 interface Participant {
   nom: string;
@@ -51,6 +54,7 @@ const generateRandomString = (length: number) => {
 
 const DocumentGenerator = () => {
   const today = new Date().toISOString().split('T')[0];
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
 
   const [selectedType, setSelectedType] = useState<string>('');
   const [customFields, setCustomFields] = useState({
@@ -92,29 +96,29 @@ const DocumentGenerator = () => {
     const idSession = queryParams.get('id_session');
     setIdSessionFormation(idSession);
 
-const fetchPrefillData = async () => {
-  try {
-    const response = await axios.get(`http://localhost:8000/convention/prefill/${idSession}`);
-    const data = response.data;
+    const fetchPrefillData = async () => {
+      try {
+        const response = await axios.get(`http://localhost:8000/convention/prefill/${idSession}`);
+        const data = response.data;
 
-    setCustomFields(prevState => ({
-      ...prevState,
-      nomFormation: data.titreFormation || '',
-      dureeFormation: data.dureeHeures || '',
-      dateLieu: data.lieuSession || today,
-      participants: data.participants || [],
-      datesSessions: data.creneaux || [],
-      prixFormation: data.prixFormation || '',
-    }));
-  } catch (error) {
-    console.error('Error fetching prefill data:', error);
-    if (axios.isAxiosError(error)) {
-      console.error('Response data:', error.response?.data);
-      console.error('Response status:', error.response?.status);
-      console.error('Response headers:', error.response?.headers);
-    }
-  }
-};
+        setCustomFields(prevState => ({
+          ...prevState,
+          nomFormation: data.titreFormation || '',
+          dureeFormation: data.dureeHeures || '',
+          dateLieu: data.lieuSession || today,
+          participants: data.participants || [],
+          datesSessions: data.creneaux || [],
+          prixFormation: data.prixFormation || '',
+        }));
+      } catch (error) {
+        console.error('Error fetching prefill data:', error);
+        if (axios.isAxiosError(error)) {
+          console.error('Response data:', error.response?.data);
+          console.error('Response status:', error.response?.status);
+          console.error('Response headers:', error.response?.headers);
+        }
+      }
+    };
 
     if (idSession) {
       fetchPrefillData();
@@ -136,12 +140,14 @@ const fetchPrefillData = async () => {
     },
   ];
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsGenerating(true);
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsGenerating(true);
 
-    try {
-      await generatePDF();
+  try {
+    const generatedPdfBlob = await generatePDF();
+    if (generatedPdfBlob) {
+      setPdfBlob(generatedPdfBlob);
       toast.success('Document généré et sauvegardé avec succès !');
       await handleSaveAndDownload();
       setShowEmailModal(true);
@@ -166,57 +172,180 @@ const fetchPrefillData = async () => {
         nomFormation: '',
         datesSessions: [],
       });
-    } catch (error) {
-      console.error('Erreur lors de la génération:', error);
-      toast.error('Erreur lors de la génération du document.');
-    } finally {
-      setIsGenerating(false);
     }
-  };
-
-const generateFileName = () => {
-  const { nomSocieteBeneficiaire, nomFormation, dateLieu } = customFields;
-  const formattedDate = formatDate(dateLieu).replace(/\//g, '-');
-  return `Convention_${nomSocieteBeneficiaire}_${nomFormation}_${formattedDate}.pdf`;
-};
-
-const handleSaveAndDownload = async () => {
-  const pdfBlob = await generatePDF();
-  if (pdfBlob) {
-    const fileName = generateFileName(); // Générer le nom de fichier significatif
-
-    const pdfUrl = URL.createObjectURL(pdfBlob);
-    const link = document.createElement('a');
-    link.href = pdfUrl;
-    link.download = fileName; // Utiliser le nom de fichier significatif pour le téléchargement
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    const formData = new FormData();
-    formData.append('file', pdfBlob, fileName); // Utiliser le même nom de fichier pour l'envoi au serveur
-    formData.append('sessionId', idSessionFormation || '');
-
-    try {
-      await uploadPDF(formData);
-      toast.success('Document téléchargé et sauvegardé avec succès!');
-    } catch (error) {
-      console.error('Error uploading PDF:', error);
-      toast.error('Erreur lors de la sauvegarde du document.');
-    }
+  } catch (error) {
+    console.error('Erreur lors de la génération:', error);
+    toast.error('Erreur lors de la génération du document.');
+  } finally {
+    setIsGenerating(false);
   }
 };
 
-  const handleSendEmail = async () => {
-    try {
-      await axios.post('http://localhost:8000/email/send', emailDetails);
-      toast.success('Email envoyé avec succès!');
-      setShowEmailModal(false);
-    } catch (error) {
-      console.error('Erreur lors de l\'envoi de l\'email:', error);
-      toast.error('Erreur lors de l\'envoi de l\'email.');
+
+  const generateFileName = () => {
+    const { nomSocieteBeneficiaire, nomFormation, dateLieu } = customFields;
+    const formattedDate = formatDate(dateLieu).replace(/\//g, '-');
+    return `Convention_${nomSocieteBeneficiaire}_${nomFormation}_${formattedDate}.pdf`;
+  };
+
+  const handleSaveAndDownload = async () => {
+    const pdfBlob = await generatePDF();
+    if (pdfBlob) {
+      const fileName = generateFileName();
+
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      const formData = new FormData();
+      formData.append('file', pdfBlob, fileName);
+      formData.append('sessionId', idSessionFormation || '');
+
+      try {
+        await uploadPDF(formData);
+        toast.success('Document téléchargé et sauvegardé avec succès!');
+      } catch (error) {
+        console.error('Error uploading PDF:', error);
+        toast.error('Erreur lors de la sauvegarde du document.');
+      }
     }
   };
+
+const handleSendEmail = async () => {
+  const recipientName = `${emailDetails.firstName} ${emailDetails.lastName}`.trim();
+
+  const initialData = {
+    requests: {
+      request_name: `Convention de formation`,
+      description: "Signature de la convention de stage entre le responsable et l'organisme d'accueil",
+      is_sequential: true,
+      actions: [
+        {
+          action_type: "SIGN",
+          recipient_email: emailDetails.to,
+          recipient_name: recipientName,
+          signing_order: 0,
+          verify_recipient: false,
+          verification_type: "EMAIL",
+          private_notes: "Responsable entreprise - signature requise"
+        }
+      ],
+      expiration_days: 10,
+      email_reminders: true,
+      reminder_period: 2,
+      notes: "Merci de signer cette convention pour finaliser la mise en place de la formation."
+    }
+  };
+
+  if (!pdfBlob) {
+    console.error('Aucun PDF Blob disponible');
+    toast.error('Aucun PDF disponible à envoyer.');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('data', JSON.stringify(initialData));
+  formData.append('file', pdfBlob, 'convention.pdf');
+
+  try {
+    // Envoyer la requête initiale pour créer la demande de signature
+    const initialResponse = await axios.post('http://localhost:8000/zoho/request', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    console.log('Réponse initiale :', initialResponse.data);
+
+    // Vérifier si initialResponse.data est défini
+    if (!initialResponse.data) {
+      throw new Error('Aucune donnée reçue dans la réponse initiale.');
+    }
+
+    // Récupérer les identifiants nécessaires de la réponse initiale
+    const { requests, status } = initialResponse.data;
+
+    if (status !== 'success') {
+      throw new Error(`La requête a échoué avec le statut : ${status}`);
+    }
+
+    // Vérifier si les requêtes et le tableau d'actions sont définis et non vides
+    if (!requests || !requests.actions || requests.actions.length === 0) {
+      throw new Error('Aucune action trouvée dans la réponse initiale.');
+    }
+
+    const { actions, document_ids } = requests;
+    const action_id = actions[0].action_id;
+    const document_id = document_ids[0].document_id; // Ajuster en fonction de la structure réelle
+
+    // Données pour la mise à jour
+    const updateData = {
+      requests: [
+        {
+          request_name: `Convention de formation`,
+          actions: [
+            {
+              action_id: action_id,
+              recipient_name: recipientName,
+              recipient_email: emailDetails.to,
+              action_type: "SIGN",
+              fields: {
+                image_fields: [
+                  {
+                    field_name: "Signature1",
+                    field_label: "Signature",
+                    field_type_name: "Signature",
+                    document_id: document_id,
+                    action_id: action_id,
+                    is_mandatory: true,
+                    x_coord: 350,
+                    y_coord: 620,
+                    abs_width: 200,
+                    abs_height: 50,
+                    page_no: 1,
+                    description_tooltip: "Placez votre signature ici",
+                    is_resizable: true,
+                    is_draggable: true
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    };
+
+    // Créer FormData pour la requête de mise à jour
+    const updateFormData = new FormData();
+    updateFormData.append('data', JSON.stringify(updateData));
+
+    // Envoyer la requête de mise à jour en utilisant FormData
+    const updateResponse = await axios.post(`http://localhost:8000/zoho/request/${requests.request_id}`, updateFormData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    // Troisième étape : Soumettre la demande de signature
+    const submitResponse = await axios.post(`http://localhost:8000/zoho/request/${requests.request_id}/submit`);
+
+    if (submitResponse.data.status !== 'success') {
+      throw new Error('Échec de la soumission de la demande de signature.');
+    }
+
+    toast.success('Demande de signature envoyée avec succès !');
+    setShowEmailModal(false);
+  } catch (error) {
+    console.error('Erreur :', error);
+    toast.error('Erreur lors de l\'envoi, de la mise à jour ou de la soumission de la demande de signature.');
+  }
+};
+
+
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -257,66 +386,69 @@ const handleSaveAndDownload = async () => {
     }));
   };
 
-  const generatePDF = async () => {
-    const input = document.getElementById('document-content');
+const generatePDF = async () => {
+  const input = document.getElementById('document-content');
 
-    if (input) {
-      try {
-        input.style.display = 'block';
+  if (input) {
+    try {
+      input.style.display = 'block';
 
-        const canvas = await html2canvas(input, {
-          useCORS: true,
-          logging: true,
-          allowTaint: true,
-          scale: 2,
-        });
+      const canvas = await html2canvas(input, {
+        useCORS: true,
+        logging: true,
+        allowTaint: true,
+        scale: 2.5, // Réduisez légèrement l'échelle pour diminuer la taille du fichier
+        quality: 0.9, // Ajustez la qualité pour un compromis taille/qualité
+      });
 
-        const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/jpeg', 0.9); // Utilisez JPEG avec une qualité légèrement réduite
 
-        if (imgData === 'data:,') {
-          throw new Error('Canvas did not generate image data');
-        }
+      if (imgData === 'data:,') {
+        throw new Error('Canvas did not generate image data');
+      }
 
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compression: true, // Activez la compression avec un niveau modéré
+      });
 
-        const imgProps = pdf.getImageProperties(imgData);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
 
-        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-        let heightLeft = imgHeight;
-        let position = 0;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfHeight;
+      }
 
-        while (heightLeft >= 0) {
-          position = heightLeft - imgHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-          heightLeft -= pdfHeight;
-        }
+      const pdfBlob = pdf.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      setPdfUrl(pdfUrl);
 
-        const pdfBlob = pdf.output('blob');
-        const pdfUrl = URL.createObjectURL(pdfBlob);
-        setPdfUrl(pdfUrl);
-
-        return pdfBlob;
-
-      } catch (error) {
-        console.error('Error generating PDF:', error);
-      } finally {
-        if (input) {
-          input.style.display = 'none';
-        }
+      return pdfBlob;
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      if (input) {
+        input.style.display = 'none';
       }
     }
-  };
+  }
+};
+
+
 
   const uploadPDF = async (formData: FormData) => {
     try {
@@ -834,10 +966,11 @@ const handleSaveAndDownload = async () => {
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px', position: 'relative' }}>
             <div style={{ position: 'absolute', left: '20px', top: '20px' }}>
               <img
-                src="../../../../public/uploads/logo.png"
+                src={logo}
                 alt="Logo"
                 style={{ width: '150px', height: 'auto', display: 'block' }}
               />
+
             </div>
             <h1 style={{ margin: 0, color: '#5fa7f1', fontSize: '18pt' }}>Convention de formation - <strong>{customFields.nomSocieteBeneficiaire}</strong></h1>
           </div>
@@ -985,14 +1118,40 @@ const handleSaveAndDownload = async () => {
 
           <p style={{ fontSize: '16pt' }}>Document réalisé en 2 exemplaires à Marssac-sur-Tarn, le <strong>{formatDate(customFields.dateLieu)}</strong></p>
 
-          <p style={{ fontSize: '16pt' }}>Pour l'organisme de formation :</p>
-          <p style={{ fontSize: '16pt' }}><strong>{customFields.nomOrganisme}</strong></p>
-          <p style={{ fontSize: '16pt' }}><strong>{customFields.representantOrganisme}</strong></p>
+<div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '50px', fontSize: '16pt' }}>
+  <div style={{ textAlign: 'center', position: 'relative' }}>
+    <p style={{ margin: 0, fontSize: '18pt' }}>
+      Pour l'organisme de formation : <strong>{customFields.nomOrganisme}</strong>
+    </p>
+    <p style={{ margin: 0, fontSize: '18pt' }}>
+      <strong>{customFields.representantOrganisme}</strong>
+    </p>
+    <div style={{ position: 'relative', left: '60px' }}>
+      <img
+        src={signature}
+        alt="Signature Organisme"
+        style={{
+          width: '250px',
+          height: 'auto',
+          display: 'block',
+          marginTop: '20px',
+        }}
+      />
+    </div>
+  </div>
 
-          <p style={{ fontSize: '16pt' }}>Pour la société bénéficiaire</p>
+  <div style={{ textAlign: 'center' }}>
+    <p style={{ margin: 0 }}>
+      Pour la société bénéficiaire : <strong>{customFields.nomSocieteBeneficiaire}</strong>
+    </p>
+    <p style={{ margin: 0 }}>
+      <strong>{customFields.representantSocieteBeneficiaire}</strong>
+    </p>
+    {/* Suppression du div avec le trait */}
+  </div>
+</div>
 
-          <p style={{ fontSize: '16pt' }}><strong>{customFields.nomSocieteBeneficiaire}</strong></p>
-          <p style={{ fontSize: '16pt' }}><strong>{customFields.representantSocieteBeneficiaire}</strong></p>
+
         </div>
       </div>
 
@@ -1044,64 +1203,66 @@ const handleSaveAndDownload = async () => {
       )}
 
       {showEmailModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-            <div className="p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Envoyer le document par email</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Destinataire</label>
-                  <input
-                    type="email"
-                    value={emailDetails.to}
-                    onChange={(e) => setEmailDetails({ ...emailDetails, to: e.target.value })}
-                    className="input-field"
-                    placeholder="Email du destinataire"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Objet</label>
-                  <input
-                    type="text"
-                    value={emailDetails.subject}
-                    onChange={(e) => setEmailDetails({ ...emailDetails, subject: e.target.value })}
-                    className="input-field"
-                    placeholder="Objet de l'email"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
-                  <textarea
-                    value={emailDetails.message}
-                    onChange={(e) => setEmailDetails({ ...emailDetails, message: e.target.value })}
-                    className="input-field"
-                    placeholder="Message"
-                    required
-                  />
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end space-x-4">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowEmailModal(false)}
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={handleSendEmail}
-                >
-                  Envoyer
-                </button>
-              </div>
-            </div>
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+      <div className="p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Envoyer le document par email</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
+            <input
+              type="text"
+              value={emailDetails.lastName}
+              onChange={(e) => setEmailDetails({ ...emailDetails, lastName: e.target.value })}
+              className="input-field"
+              placeholder="Nom"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
+            <input
+              type="text"
+              value={emailDetails.firstName}
+              onChange={(e) => setEmailDetails({ ...emailDetails, firstName: e.target.value })}
+              className="input-field"
+              placeholder="Prénom"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              value={emailDetails.to}
+              onChange={(e) => setEmailDetails({ ...emailDetails, to: e.target.value })}
+              className="input-field"
+              placeholder="Email du destinataire"
+              required
+            />
           </div>
         </div>
-      )}
+        <div className="mt-6 flex justify-end space-x-4">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setShowEmailModal(false)}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleSendEmail}
+          >
+            Envoyer
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 };
